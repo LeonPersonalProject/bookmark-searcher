@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "书签搜索器",
+  "version": "2.0.0",
+  "description": "快速搜索和访问浏览器书签",
+  "permissions": [
+    "bookmarks"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

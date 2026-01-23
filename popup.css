@@ -1,0 +1,438 @@
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 隐藏 html 和 body 的滚动条 */
+html {
+  overflow: hidden;
+  width: 400px;
+  height: 600px;
+}
+
+/* 主体样式 - 干净的浅色背景 */
+body {
+  width: 400px;
+  height: 600px;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #1f2937;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 背景动态效果 */
+body::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 主容器 - 增强毛玻璃效果 */
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 1;
+}
+
+/* 标题区域 - 白色毛玻璃 */
+.header {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1f2937;
+  padding: 12px 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 标题光效 */
+.header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 搜索框容器 */
+.search-box {
+  flex-shrink: 0;
+  position: relative;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* 搜索输入框 - 白色毛玻璃效果 */
+#searchInput {
+  width: 100%;
+  padding: 14px 45px 14px 20px;
+  font-size: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(15px) saturate(180%);
+  -webkit-backdrop-filter: blur(15px) saturate(180%);
+  color: #1f2937;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+#searchInput:focus {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08), 0 4px 12px rgba(99, 102, 241, 0.1);
+  transform: translateY(-1px);
+}
+
+#searchInput::placeholder {
+  color: rgba(31, 41, 55, 0.4);
+  font-weight: 400;
+}
+
+/* 搜索图标 */
+.search-icon {
+  position: absolute;
+  right: 35px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+/* 统计信息和导航 */
+.stats {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  font-size: 12px;
+  color: rgba(31, 41, 55, 0.5);
+  background: rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 返回按钮 */
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #6366f1;
+  transform: translateX(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.back-button:active {
+  transform: translateX(-1px) scale(0.98);
+}
+
+.back-icon {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* 当前路径 */
+.current-path {
+  color: #4b5563;
+  font-weight: 600;
+  text-transform: none;
+}
+
+/* 结果计数 */
+.result-count {
+  margin-left: auto;
+  text-transform: uppercase;
+}
+
+/* 结果列表容器 */
+.results {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 自定义滚动条 - 白色毛玻璃风格 */
+.results::-webkit-scrollbar {
+  width: 10px;
+}
+
+.results::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 10px;
+  margin: 8px 0;
+  border: 2px solid transparent;
+}
+
+.results::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.results::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+/* 单个书签项 - 白色毛玻璃卡片 */
+.bookmark-item {
+  margin: 8px 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(15px) saturate(180%);
+  -webkit-backdrop-filter: blur(15px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-left: 3px solid transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 文件夹项特殊样式 */
+.folder-item {
+  background: rgba(251, 191, 36, 0.12);
+  border-left-color: rgba(251, 191, 36, 0.3);
+}
+
+.folder-item:hover {
+  background: rgba(251, 191, 36, 0.2);
+  border-left-color: rgba(251, 191, 36, 0.5);
+}
+
+.folder-item.selected {
+  background: rgba(251, 191, 36, 0.28);
+  border-left-color: #f59e0b;
+  border-left-width: 4px;
+}
+
+/* 书签项光效 */
+.bookmark-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s;
+}
+
+.bookmark-item:hover::before {
+  left: 100%;
+}
+
+.bookmark-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(99, 102, 241, 0.2);
+  border-left-color: rgba(99, 102, 241, 0.5);
+  transform: translateX(4px) scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.bookmark-item:active {
+  transform: translateX(4px) scale(0.98);
+}
+
+/* 键盘选中状态 - 白色发光效果 */
+.bookmark-item.selected {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(99, 102, 241, 0.3);
+  border-left-color: #6366f1;
+  border-left-width: 4px;
+  transform: translateX(6px);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* 书签标题 */
+.bookmark-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 文件夹图标 */
+.folder-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* 文件夹计数 */
+.folder-count {
+  font-size: 11px;
+  color: rgba(31, 41, 55, 0.5);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* 高亮匹配文本 - 清爽的高亮效果 */
+.highlight {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* 书签 URL */
+.bookmark-url {
+  font-size: 12px;
+  color: rgba(99, 102, 241, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+/* 书签路径 */
+.bookmark-path {
+  font-size: 11px;
+  color: rgba(31, 41, 55, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  color: rgba(31, 41, 55, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.empty-state p {
+  font-size: 18px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.empty-state small {
+  font-size: 13px;
+  color: rgba(31, 41, 55, 0.3);
+  font-weight: 500;
+}
+
+/* 加载动画 */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #6366f1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading::after {
+  content: '...';
+  animation: pulse 1.5s ease-in-out infinite;
+}
