@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图标生成器</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f7fa;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #6366f1;
+      margin-bottom: 20px;
+    }
+    .icons {
+      display: flex;
+      gap: 30px;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    .icon-item {
+      text-align: center;
+    }
+    canvas {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      display: block;
+      margin-bottom: 10px;
+    }
+    button {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+    .instructions {
+      background: #f0f9ff;
+      border-left: 4px solid #6366f1;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 4px;
+    }
+    .instructions h3 {
+      margin-top: 0;
+      color: #6366f1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 书签搜索器图标生成器</h1>
+    <p>点击下载按钮保存对应尺寸的图标</p>
+
+    <div class="icons">
+      <div class="icon-item">
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <div>16x16</div>
+        <button onclick="downloadIcon('icon16', 16)">下载</button>
+      </div>
+      <div class="icon-item">
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <div>48x48</div>
+        <button onclick="downloadIcon('icon48', 48)">下载</button>
+      </div>
+      <div class="icon-item">
+        <canvas id="icon128" width="128" height="128"></canvas>
+        <div>128x128</div>
+        <button onclick="downloadIcon('icon128', 128)">下载</button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h3>📝 使用说明</h3>
+      <ol>
+        <li>点击每个图标下方的"下载"按钮</li>
+        <li>将下载的文件重命名为 <code>icon-16.png</code>、<code>icon-48.png</code>、<code>icon-128.png</code></li>
+        <li>将这些文件放到项目的 <code>icons/</code> 目录中</li>
+        <li>重新加载浏览器插件即可看到新图标</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // 绘制图标的函数
+    function drawIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // 启用抗锯齿
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // 缩放比例
+      const scale = size / 128;
+
+      // 背景渐变
+      const bgGradient = ctx.createLinearGradient(0, 0, size, size);
+      bgGradient.addColorStop(0, '#f5f7fa');
+      bgGradient.addColorStop(1, '#e0e7ff');
+
+      // 绘制圆角矩形背景
+      const radius = 24 * scale;
+      ctx.fillStyle = bgGradient;
+      ctx.beginPath();
+      ctx.moveTo(radius, 0);
+      ctx.lineTo(size - radius, 0);
+      ctx.quadraticCurveTo(size, 0, size, radius);
+      ctx.lineTo(size, size - radius);
+      ctx.quadraticCurveTo(size, size, size - radius, size);
+      ctx.lineTo(radius, size);
+      ctx.quadraticCurveTo(0, size, 0, size - radius);
+      ctx.lineTo(0, radius);
+      ctx.quadraticCurveTo(0, 0, radius, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // 书签渐变
+      const bookmarkGradient = ctx.createLinearGradient(0, 0, size, size);
+      bookmarkGradient.addColorStop(0, '#818cf8');
+      bookmarkGradient.addColorStop(1, '#6366f1');
+
+      // 绘制书签形状
+      ctx.fillStyle = bookmarkGradient;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(45 * scale, 30 * scale);
+      ctx.lineTo(83 * scale, 30 * scale);
+      ctx.quadraticCurveTo(88 * scale, 30 * scale, 88 * scale, 35 * scale);
+      ctx.lineTo(88 * scale, 90 * scale);
+      ctx.lineTo(64 * scale, 75 * scale);
+      ctx.lineTo(40 * scale, 90 * scale);
+      ctx.lineTo(40 * scale, 35 * scale);
+      ctx.quadraticCurveTo(40 * scale, 30 * scale, 45 * scale, 30 * scale);
+      ctx.closePath();
+      ctx.fill();
+
+      // 书签装饰线
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = 'white';
+      roundRect(ctx, 48 * scale, 40 * scale, 32 * scale, 3 * scale, 1.5 * scale);
+
+      ctx.globalAlpha = 0.3;
+      roundRect(ctx, 48 * scale, 48 * scale, 24 * scale, 2.5 * scale, 1.25 * scale);
+      roundRect(ctx, 48 * scale, 55 * scale, 28 * scale, 2.5 * scale, 1.25 * scale);
+
+      // 搜索放大镜渐变
+      const searchGradient = ctx.createLinearGradient(0, 0, size, size);
+      searchGradient.addColorStop(0, '#a5b4fc');
+      searchGradient.addColorStop(1, '#818cf8');
+
+      // 绘制放大镜圆圈
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = searchGradient;
+      ctx.lineWidth = 5 * scale;
+      ctx.beginPath();
+      ctx.arc(85 * scale, 85 * scale, 16 * scale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 放大镜内部高光
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(82 * scale, 82 * scale, 6 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 放大镜手柄
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = searchGradient;
+      ctx.lineWidth = 5 * scale;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(96 * scale, 96 * scale);
+      ctx.lineTo(106 * scale, 106 * scale);
+      ctx.stroke();
+
+      // 装饰光点
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(50 * scale, 45 * scale, 2 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(70 * scale, 42 * scale, 1.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.arc(95 * scale, 70 * scale, 1.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 辅助函数：绘制圆角矩形
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 下载图标
+    function downloadIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = `icon-${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // 页面加载时绘制所有图标
+    window.onload = function() {
+      drawIcon('icon16', 16);
+      drawIcon('icon48', 48);
+      drawIcon('icon128', 128);
+    };
+  </script>
+</body>
+</html>
