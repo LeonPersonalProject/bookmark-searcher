@@ -11,7 +11,10 @@
   <div class="container">
     <!-- 标题区域 -->
     <div class="header">
-      <h1>🔖 bookmark-searcher</h1>
+      <h1>🔖 π僧书签</h1>
+      <button id="settingsButton" class="icon-button" aria-label="设置" title="设置">
+        <span>⚙️</span>
+      </button>
     </div>
 
     <!-- 搜索输入框 -->
@@ -21,13 +24,20 @@
         id="searchInput"
         placeholder="输入关键词搜索书签..."
         autofocus
+        role="searchbox"
+        aria-label="搜索书签"
       >
+      <button id="clearSearchButton" class="clear-search-button" style="display: none;" aria-label="清空搜索" title="清空">
+        <span>✕</span>
+      </button>
       <span class="search-icon">🔍</span>
+      <!-- 搜索历史下拉 -->
+      <div id="searchHistory" class="search-history" style="display: none;"></div>
     </div>
 
     <!-- 统计信息和导航 -->
     <div class="stats">
-      <button id="backButton" class="back-button" style="display: none;">
+      <button id="backButton" class="back-button" style="display: none;" aria-label="返回上一级">
         <span class="back-icon">←</span>
         <span>返回</span>
       </button>
@@ -35,8 +45,21 @@
       <span id="resultCount" class="result-count">加载中...</span>
     </div>
 
+    <!-- 最近访问 -->
+    <div id="recentSection" class="recent-section" style="display: none;">
+      <div class="section-title">⏱️ 最近访问</div>
+      <div id="recentBookmarks" class="recent-bookmarks"></div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div id="loadingState" class="loading-state" style="display: none;">
+      <div class="skeleton-item"></div>
+      <div class="skeleton-item"></div>
+      <div class="skeleton-item"></div>
+    </div>
+
     <!-- 搜索结果列表 -->
-    <div class="results" id="results">
+    <div class="results" id="results" role="list">
       <!-- 结果将通过 JavaScript 动态插入 -->
     </div>
 
@@ -44,6 +67,56 @@
     <div class="empty-state" id="emptyState" style="display: none;">
       <p>😔 没有找到匹配的书签</p>
       <small>尝试使用不同的关键词</small>
+      <div class="empty-tips">
+        <p>💡 小贴士：</p>
+        <ul>
+          <li>使用 <kbd>↑</kbd> <kbd>↓</kbd> 键导航</li>
+          <li>按 <kbd>Enter</kbd> 打开书签</li>
+          <li>按 <kbd>Esc</kbd> 清空搜索</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div id="errorToast" class="error-toast" style="display: none;"></div>
+  </div>
+
+  <!-- 设置面板 -->
+  <div id="settingsPanel" class="settings-panel" style="display: none;">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>⚙️ 设置</h2>
+        <button id="closeSettings" class="icon-button" aria-label="关闭">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="setting-item">
+          <label for="darkModeToggle">
+            <span>🌙 深色模式</span>
+            <input type="checkbox" id="darkModeToggle" class="toggle">
+          </label>
+        </div>
+        <div class="setting-item">
+          <label for="showFaviconToggle">
+            <span>🎨 显示网站图标</span>
+            <input type="checkbox" id="showFaviconToggle" class="toggle" checked>
+          </label>
+        </div>
+        <div class="setting-item">
+          <label for="fuzzySearchToggle">
+            <span>🔍 模糊搜索</span>
+            <input type="checkbox" id="fuzzySearchToggle" class="toggle">
+          </label>
+        </div>
+        <div class="setting-item">
+          <button id="clearHistoryButton" class="button-secondary">
+            🗑️ 清除历史记录
+          </button>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <p>快捷键：<kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd></p>
+        <p class="version">版本 2.1.0</p>
+      </div>
     </div>
   </div>
 

@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
   "name": "书签搜索器",
-  "version": "2.0.0",
-  "description": "快速搜索和访问浏览器书签",
+  "version": "2.1.0",
+  "description": "快速搜索和访问浏览器书签，支持文件夹导航、键盘快捷键、深色模式",
   "permissions": [
-    "bookmarks"
+    "bookmarks",
+    "storage",
+    "contextMenus"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -18,5 +20,17 @@
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "打开书签搜索器"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }

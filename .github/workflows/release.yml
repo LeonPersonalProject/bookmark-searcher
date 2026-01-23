@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create release package
+        run: |
+          mkdir -p release
+          cp manifest.json popup.html popup.css popup.js release/
+          cp -r icons release/
+          cp logo.svg logo-small.svg release/
+          cd release
+          zip -r ../bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip
+          body: |
+            ## 📦 书签搜索器 v${{ steps.get_version.outputs.VERSION }}
+
+            ### 安装方法
+            1. 下载 `bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip`
+            2. 解压文件
+            3. 打开浏览器扩展管理页面
+            4. 开启"开发者模式"
+            5. 点击"加载已解压的扩展程序"
+            6. 选择解压后的文件夹
+
+            ### 更新日志
+            查看 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) 了解详细更新内容。
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
