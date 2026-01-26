@@ -735,17 +735,20 @@ function showError(message, type = 'error') {
 
 // ==================== 右键菜单 ====================
 function createContextMenu() {
-  // 创建右键菜单项
-  chrome.contextMenus.create({
-    id: 'editBookmark',
-    title: '编辑书签',
-    contexts: ['all']
-  });
+  // 先移除所有现有的右键菜单项，避免重复创建
+  chrome.contextMenus.removeAll(() => {
+    // 创建右键菜单项
+    chrome.contextMenus.create({
+      id: 'editBookmark',
+      title: '编辑书签',
+      contexts: ['all']
+    });
 
-  chrome.contextMenus.create({
-    id: 'deleteBookmark',
-    title: '删除书签',
-    contexts: ['all']
+    chrome.contextMenus.create({
+      id: 'deleteBookmark',
+      title: '删除书签',
+      contexts: ['all']
+    });
   });
 }
 
