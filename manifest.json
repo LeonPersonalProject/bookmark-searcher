@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "书签搜索器",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "快速搜索和访问浏览器书签，支持文件夹导航、键盘快捷键和多套配色主题",
   "permissions": [
     "bookmarks",

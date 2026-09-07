@@ -19,12 +19,14 @@ test('HTML ID 唯一且脚本引用的元素都存在', () => {
   assert.deepEqual(referencedIds.filter(id => !uniqueIds.has(id)), []);
 });
 
-test('搜索核心在弹窗逻辑之前加载', () => {
+test('搜索与键盘核心在弹窗逻辑之前加载', () => {
   const searchScriptIndex = html.indexOf('<script src="search.js"></script>');
+  const keyboardScriptIndex = html.indexOf('<script src="keyboard.js"></script>');
   const popupScriptIndex = html.indexOf('<script src="popup.js"></script>');
 
   assert.ok(searchScriptIndex >= 0);
-  assert.ok(popupScriptIndex > searchScriptIndex);
+  assert.ok(keyboardScriptIndex > searchScriptIndex);
+  assert.ok(popupScriptIndex > keyboardScriptIndex);
 });
 
 test('CSS 大括号匹配', () => {

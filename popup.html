@@ -91,8 +91,10 @@
     <footer class="shortcut-footer" aria-label="键盘操作提示">
       <span><kbd>↑ ↓</kbd> 选择</span>
       <span><kbd>Enter</kbd> 打开</span>
-      <span><kbd data-background-shortcut>Ctrl Enter</kbd> 后台</span>
-      <span><kbd>右键</kbd> 更多</span>
+      <span><kbd>Alt ↑</kbd> 上级</span>
+      <button id="shortcutHelpButton" class="shortcut-help-button" type="button" aria-label="查看所有键盘快捷键">
+        <kbd>?</kbd> 快捷键
+      </button>
     </footer>
 
     <div id="errorToast" class="error-toast" role="status" aria-live="polite" hidden></div>
@@ -122,6 +124,49 @@
       </svg>
       <span>删除书签</span>
     </button>
+  </div>
+
+  <div id="shortcutHelp" class="shortcut-help" aria-hidden="true" hidden>
+    <section class="shortcut-help-content" role="dialog" aria-modal="true" aria-labelledby="shortcutHelpTitle">
+      <div class="shortcut-help-header">
+        <div>
+          <h2 id="shortcutHelpTitle">键盘快捷键</h2>
+          <p>像文件浏览器一样操作书签</p>
+        </div>
+        <button id="closeShortcutHelp" class="icon-button" type="button" aria-label="关闭快捷键说明">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 7 10 10M17 7 7 17"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="shortcut-help-body">
+        <section class="shortcut-group" aria-labelledby="browseShortcutTitle">
+          <h3 id="browseShortcutTitle">浏览目录</h3>
+          <div class="shortcut-row"><span>选择上一项或下一项</span><kbd>↑ / ↓</kbd></div>
+          <div class="shortcut-row"><span>只在文件夹之间跳转</span><kbd data-primary-shortcut="folders">Ctrl ↑ / ↓</kbd></div>
+          <div class="shortcut-row"><span>进入选中的文件夹</span><kbd>→ / Enter</kbd></div>
+          <div class="shortcut-row"><span>返回上一级目录</span><kbd>← / Alt ↑</kbd></div>
+          <div class="shortcut-row"><span>空搜索时返回上级</span><kbd>Backspace</kbd></div>
+          <div class="shortcut-row"><span>跳到首项或末项</span><kbd data-primary-shortcut="bounds">Ctrl Home / End</kbd></div>
+          <div class="shortcut-row"><span>向上或向下翻页</span><kbd>PageUp / PageDown</kbd></div>
+        </section>
+        <section class="shortcut-group" aria-labelledby="openShortcutTitle">
+          <h3 id="openShortcutTitle">打开与管理</h3>
+          <div class="shortcut-row"><span>打开书签</span><kbd>Enter</kbd></div>
+          <div class="shortcut-row"><span>在后台打开</span><kbd data-primary-shortcut="enter">Ctrl Enter</kbd></div>
+          <div class="shortcut-row"><span>在当前页打开</span><kbd>Shift Enter</kbd></div>
+          <div class="shortcut-row"><span>显示更多操作</span><kbd>Shift F10</kbd></div>
+          <div class="shortcut-row"><span>编辑选中的书签</span><kbd>F2</kbd></div>
+          <div class="shortcut-row"><span>删除选中的书签</span><kbd>Delete</kbd></div>
+        </section>
+        <section class="shortcut-group" aria-labelledby="generalShortcutTitle">
+          <h3 id="generalShortcutTitle">通用</h3>
+          <div class="shortcut-row"><span>回到搜索框</span><kbd data-primary-shortcut="search">Ctrl F</kbd></div>
+          <div class="shortcut-row"><span>分级关闭或返回</span><kbd>Esc</kbd></div>
+          <div class="shortcut-row"><span>打开本页说明</span><kbd data-primary-shortcut="help">Ctrl /</kbd></div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <div id="settingsPanel" class="settings-panel" aria-hidden="true" hidden>
@@ -233,7 +278,7 @@
 
       <div class="settings-footer">
         <span>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></span>
-        <span>v2.2.0</span>
+        <span>v2.3.0</span>
       </div>
     </aside>
   </div>
@@ -288,6 +333,7 @@
   </div>
 
   <script src="search.js"></script>
+  <script src="keyboard.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

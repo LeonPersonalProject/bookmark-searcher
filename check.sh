@@ -3,6 +3,7 @@
 set -e
 
 node --check search.js
+node --check keyboard.js
 node --check popup.js
 python3 -m json.tool manifest.json >/dev/null
 node --test tests/*.test.js

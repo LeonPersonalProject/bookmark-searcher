@@ -19,6 +19,7 @@ let activeActionBookmark = null;
 let actionMenuLastFocusedElement = null;
 let editingBookmarkId = null;
 let bookmarkEditorReturnFocus = null;
+let shortcutHelpLastFocusedElement = null;
 let settings = {
   themeMode: 'system',
   colorTheme: 'classic',
@@ -33,6 +34,7 @@ const {
   prepareSearchItem,
   searchAndRank
 } = window.BookmarkSearchCore;
+const { getShortcutIntent } = window.BookmarkKeyboardCore;
 
 // ==================== DOM 元素引用 ====================
 const searchInput = document.getElementById('searchInput');
@@ -77,6 +79,10 @@ const bookmarkTitleInput = document.getElementById('bookmarkTitleInput');
 const bookmarkUrlInput = document.getElementById('bookmarkUrlInput');
 const bookmarkEditorError = document.getElementById('bookmarkEditorError');
 const backgroundShortcutLabels = document.querySelectorAll('[data-background-shortcut]');
+const primaryShortcutLabels = document.querySelectorAll('[data-primary-shortcut]');
+const shortcutHelpButton = document.getElementById('shortcutHelpButton');
+const shortcutHelp = document.getElementById('shortcutHelp');
+const closeShortcutHelp = document.getElementById('closeShortcutHelp');
 
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -164,10 +170,19 @@ function bindEventListeners() {
       closeBookmarkEditorDialog();
     }
   });
+  shortcutHelpButton.addEventListener('click', openShortcutHelp);
+  closeShortcutHelp.addEventListener('click', () => closeShortcutHelpDialog());
+  shortcutHelp.addEventListener('click', event => {
+    if (event.target === shortcutHelp) {
+      closeShortcutHelpDialog();
+    }
+  });
+  shortcutHelp.addEventListener('keydown', handleShortcutHelpKeydown);
+  document.addEventListener('keydown', handleGlobalKeyboardShortcuts);
   document.addEventListener('pointerdown', event => {
     if (!bookmarkActions.hidden
       && !bookmarkActions.contains(event.target)
-      && !event.target.closest('.bookmark-action-trigger')) {
+      && (!(event.target instanceof Element) || !event.target.closest('.bookmark-action-trigger'))) {
       closeBookmarkActions(false);
     }
   });
@@ -182,9 +197,20 @@ function bindEventListeners() {
 
 function updateShortcutLabel() {
   const isMac = navigator.platform.toLowerCase().includes('mac');
+  const primaryKeyLabel = isMac ? '⌘' : 'Ctrl';
   searchShortcut.textContent = isMac ? '⌘ ⇧ K' : 'Ctrl ⇧ K';
   backgroundShortcutLabels.forEach(label => {
     label.textContent = isMac ? '⌘ Enter' : 'Ctrl Enter';
+  });
+  primaryShortcutLabels.forEach(label => {
+    const shortcutLabels = {
+      folders: `${primaryKeyLabel} ↑ / ↓`,
+      bounds: `${primaryKeyLabel} Home / End`,
+      enter: `${primaryKeyLabel} Enter`,
+      search: `${primaryKeyLabel} F`,
+      help: `${primaryKeyLabel} /`
+    };
+    label.textContent = shortcutLabels[label.dataset.primaryShortcut] || label.textContent;
   });
 }
 
@@ -347,7 +373,11 @@ function createItemElement(item, query, index) {
   button.className = item.type === 'folder' ? 'bookmark-item folder-item' : 'bookmark-item';
   button.dataset.index = index;
   button.dataset.itemId = item.id;
+  button.dataset.itemType = item.type;
   button.id = `result-item-${index}`;
+  button.addEventListener('focus', () => {
+    setSelectedIndex(index);
+  });
 
   const highlightedTitle = highlightText(item.title, query.terms);
 
@@ -491,22 +521,25 @@ function iconSvg(name) {
 
 // ==================== 键盘导航 ====================
 function handleKeyNavigation(event) {
+  if (handleEnhancedKeyboardShortcut(event)) return;
+
+  const hasNavigationModifier = event.altKey || event.ctrlKey || event.metaKey;
   if (!searchHistoryEl.hidden) {
     const historyItems = searchHistoryEl.querySelectorAll('.history-item:not(.clear-history-item)');
 
-    if (event.key === 'ArrowDown' && historyItems.length > 0) {
+    if (event.key === 'ArrowDown' && !hasNavigationModifier && historyItems.length > 0) {
       event.preventDefault();
       setHistorySelectedIndex((historySelectedIndex + 1) % historyItems.length);
       return;
     }
 
-    if (event.key === 'ArrowUp' && historyItems.length > 0) {
+    if (event.key === 'ArrowUp' && !hasNavigationModifier && historyItems.length > 0) {
       event.preventDefault();
       setHistorySelectedIndex((historySelectedIndex - 1 + historyItems.length) % historyItems.length);
       return;
     }
 
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !hasNavigationModifier && !event.shiftKey) {
       event.preventDefault();
       if (historySelectedIndex >= 0) {
         historyItems[historySelectedIndex].click();
@@ -520,16 +553,7 @@ function handleKeyNavigation(event) {
 
   if (event.key === 'Escape') {
     event.preventDefault();
-
-    if (!searchHistoryEl.hidden) {
-      hideSearchHistory();
-    } else if (searchInput.value) {
-      clearSearch();
-    } else if (currentFolderId !== null) {
-      handleBack();
-    } else {
-      window.close();
-    }
+    handleEscapeNavigation();
     return;
   }
 
@@ -537,12 +561,14 @@ function handleKeyNavigation(event) {
 
   switch (event.key) {
     case 'ArrowDown':
+      if (hasNavigationModifier) break;
       event.preventDefault();
       setSelectedIndex((selectedIndex + 1) % totalItems);
       scrollToSelected();
       break;
 
     case 'ArrowUp':
+      if (hasNavigationModifier) break;
       event.preventDefault();
       setSelectedIndex((selectedIndex - 1 + totalItems) % totalItems);
       scrollToSelected();
@@ -565,6 +591,221 @@ function handleKeyNavigation(event) {
       }
       break;
   }
+}
+
+function handleGlobalKeyboardShortcuts(event) {
+  if (event.defaultPrevented || isKeyboardLayerOpen()) return;
+  if (handleEnhancedKeyboardShortcut(event)) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    handleEscapeNavigation();
+    return;
+  }
+
+  const focusedResult = document.activeElement instanceof Element
+    ? document.activeElement.closest('.bookmark-item')
+    : null;
+  if (focusedResult && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault();
+    moveFocusedResultSelection(event.key === 'ArrowDown' ? 1 : -1);
+  }
+}
+
+function handleEscapeNavigation() {
+  if (!searchHistoryEl.hidden) {
+    hideSearchHistory();
+  } else if (searchInput.value) {
+    clearSearch();
+  } else if (currentFolderId !== null) {
+    handleBack();
+  } else if (document.activeElement !== searchInput) {
+    searchInput.focus();
+  } else {
+    window.close();
+  }
+}
+
+function isKeyboardLayerOpen() {
+  return !settingsPanel.hidden
+    || !confirmDialog.hidden
+    || !bookmarkActions.hidden
+    || !bookmarkEditor.hidden
+    || !shortcutHelp.hidden;
+}
+
+function handleEnhancedKeyboardShortcut(event) {
+  const selection = getSelectedResultContext();
+  const intent = getShortcutIntent(event, {
+    hasSelection: Boolean(selection),
+    inFolder: currentFolderId !== null,
+    isInputFocused: document.activeElement === searchInput,
+    searchEmpty: searchInput.value.length === 0,
+    selectedType: selection?.item.type || null
+  });
+  if (!intent) return false;
+
+  event.preventDefault();
+  executeShortcutIntent(intent, selection);
+  return true;
+}
+
+function executeShortcutIntent(intent, selection) {
+  switch (intent) {
+    case 'focus-search':
+      searchInput.focus();
+      searchInput.select();
+      if (!searchInput.value) showSearchHistory();
+      break;
+    case 'show-shortcuts':
+      openShortcutHelp();
+      break;
+    case 'parent-folder':
+      handleBack();
+      break;
+    case 'enter-folder':
+      activateSelectedFolder(selection);
+      break;
+    case 'next-folder':
+      selectAdjacentFolder(1);
+      break;
+    case 'previous-folder':
+      selectAdjacentFolder(-1);
+      break;
+    case 'first-result':
+      selectResultBoundary('first');
+      break;
+    case 'last-result':
+      selectResultBoundary('last');
+      break;
+    case 'page-down':
+      moveSelectionByPage(1);
+      break;
+    case 'page-up':
+      moveSelectionByPage(-1);
+      break;
+    case 'bookmark-actions':
+      openSelectedBookmarkActions(selection);
+      break;
+    case 'open-background':
+      recordSearchKeyword({ persist: false });
+      openBookmark(selection.item.url, selection.item, 'background');
+      break;
+    case 'open-current':
+      recordSearchKeyword({ persist: false });
+      openBookmark(selection.item.url, selection.item, 'current');
+      break;
+    case 'edit-bookmark':
+      openBookmarkEditor(selection.item, selection.element);
+      break;
+    case 'delete-bookmark':
+      deleteBookmarkWithConfirmation(selection.item);
+      break;
+  }
+}
+
+function getSelectedResultContext() {
+  const resultItems = [...resultsContainer.querySelectorAll('.bookmark-item')];
+  let element = resultsContainer.querySelector('.bookmark-item.selected');
+
+  if (!element && document.activeElement instanceof Element) {
+    const focusedItem = document.activeElement.closest('.bookmark-item');
+    if (focusedItem && resultsContainer.contains(focusedItem)) {
+      element = focusedItem;
+    }
+  }
+
+  if (!element) return null;
+  const index = resultItems.indexOf(element);
+  const item = allItems.find(candidate => candidate.id === element.dataset.itemId);
+  return item ? { element, index, item } : null;
+}
+
+function selectAdjacentFolder(direction) {
+  hideSearchHistory();
+  const resultItems = [...resultsContainer.querySelectorAll('.bookmark-item')];
+  if (resultItems.length === 0) return;
+
+  const startIndex = selectedIndex >= 0
+    ? selectedIndex
+    : direction > 0 ? -1 : 0;
+
+  for (let offset = 1; offset <= resultItems.length; offset++) {
+    const index = (startIndex + direction * offset + resultItems.length) % resultItems.length;
+    if (resultItems[index].dataset.itemType === 'folder') {
+      setSelectedIndex(index);
+      scrollToSelected();
+      syncFocusedResultToSelection();
+      return;
+    }
+  }
+
+  showError('当前列表中没有文件夹');
+}
+
+function activateSelectedFolder(selection = getSelectedResultContext()) {
+  if (selection?.item.type === 'folder') {
+    selection.element.click();
+    return;
+  }
+
+  selectAdjacentFolder(1);
+}
+
+function selectResultBoundary(position) {
+  hideSearchHistory();
+  const resultItems = resultsContainer.querySelectorAll('.bookmark-item');
+  if (resultItems.length === 0) return;
+
+  setSelectedIndex(position === 'first' ? 0 : resultItems.length - 1);
+  scrollToSelected();
+  syncFocusedResultToSelection();
+}
+
+function moveSelectionByPage(direction) {
+  hideSearchHistory();
+  const resultItems = resultsContainer.querySelectorAll('.bookmark-item');
+  if (resultItems.length === 0) return;
+
+  const visibleItemCount = Math.max(1, Math.floor(contentArea.clientHeight / 59));
+  const startIndex = selectedIndex >= 0
+    ? selectedIndex
+    : direction > 0 ? -1 : resultItems.length;
+  const nextIndex = Math.max(
+    0,
+    Math.min(resultItems.length - 1, startIndex + direction * visibleItemCount)
+  );
+  setSelectedIndex(nextIndex);
+  scrollToSelected();
+  syncFocusedResultToSelection();
+}
+
+function moveFocusedResultSelection(direction) {
+  const resultItems = [...resultsContainer.querySelectorAll('.bookmark-item')];
+  if (resultItems.length === 0) return;
+
+  const currentSelection = getSelectedResultContext();
+  const currentIndex = currentSelection?.index ?? (direction > 0 ? -1 : 0);
+  const nextIndex = (currentIndex + direction + resultItems.length) % resultItems.length;
+  setSelectedIndex(nextIndex);
+  resultItems[nextIndex].focus({ preventScroll: true });
+  scrollToSelected();
+}
+
+function syncFocusedResultToSelection() {
+  if (!(document.activeElement instanceof Element)
+    || !resultsContainer.contains(document.activeElement)) return;
+
+  resultsContainer.querySelector('.bookmark-item.selected')?.focus({ preventScroll: true });
+}
+
+function openSelectedBookmarkActions(selection = getSelectedResultContext()) {
+  if (!selection || selection.item.type !== 'bookmark') return;
+
+  const actionTrigger = selection.element
+    .closest('.bookmark-row')
+    ?.querySelector('.bookmark-action-trigger');
+  openBookmarkActions(selection.item, { anchor: actionTrigger || selection.element });
 }
 
 function setSelectedIndex(index) {
@@ -644,8 +885,18 @@ function navigateToFolder(folderId) {
 }
 
 function handleBack() {
+  if (currentFolderId === null) return;
+
+  const previousFolderId = currentFolderId;
   const currentFolder = allItems.find(item => item.type === 'folder' && item.id === currentFolderId);
   navigateToFolder(currentFolder ? currentFolder.parentId : null);
+
+  const previousFolderIndex = [...resultsContainer.querySelectorAll('.bookmark-item')]
+    .findIndex(item => item.dataset.itemId === previousFolderId);
+  if (previousFolderIndex >= 0) {
+    setSelectedIndex(previousFolderIndex);
+    scrollToSelected();
+  }
 }
 
 function enterFolder(folderId) {
@@ -1094,6 +1345,55 @@ function removeBookmarkById(bookmarkId) {
       }
     });
   });
+}
+
+// ==================== 快捷键说明 ====================
+function openShortcutHelp() {
+  if (!shortcutHelp.hidden) return;
+
+  closeBookmarkActions(false);
+  hideSearchHistory();
+  shortcutHelpLastFocusedElement = document.activeElement;
+  shortcutHelp.hidden = false;
+  shortcutHelp.setAttribute('aria-hidden', 'false');
+  closeShortcutHelp.focus();
+}
+
+function closeShortcutHelpDialog(restoreFocus = true) {
+  if (shortcutHelp.hidden) return;
+
+  const focusTarget = shortcutHelpLastFocusedElement;
+  shortcutHelp.hidden = true;
+  shortcutHelp.setAttribute('aria-hidden', 'true');
+  shortcutHelpLastFocusedElement = null;
+
+  if (restoreFocus && focusTarget instanceof HTMLElement && document.contains(focusTarget)) {
+    focusTarget.focus();
+  } else if (restoreFocus) {
+    searchInput.focus();
+  }
+}
+
+function handleShortcutHelpKeydown(event) {
+  if (event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.key === '/')) {
+    event.preventDefault();
+    closeShortcutHelpDialog();
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+
+  const focusableElements = shortcutHelp.querySelectorAll('button:not([disabled])');
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
 }
 
 // ==================== 设置面板 ====================
