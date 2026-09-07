@@ -31,7 +31,7 @@
         <input
           type="search"
           id="searchInput"
-          placeholder="搜索标题、网址或文件夹"
+          placeholder="搜索多个关键词，或输入 domain:"
           autocomplete="off"
           autofocus
           aria-label="搜索书签"
@@ -91,10 +91,37 @@
     <footer class="shortcut-footer" aria-label="键盘操作提示">
       <span><kbd>↑ ↓</kbd> 选择</span>
       <span><kbd>Enter</kbd> 打开</span>
-      <span><kbd>Esc</kbd> 返回</span>
+      <span><kbd data-background-shortcut>Ctrl Enter</kbd> 后台</span>
+      <span><kbd>右键</kbd> 更多</span>
     </footer>
 
     <div id="errorToast" class="error-toast" role="status" aria-live="polite" hidden></div>
+  </div>
+
+  <div id="bookmarkActions" class="bookmark-actions" role="menu" aria-labelledby="bookmarkActionsTitle" aria-hidden="true" hidden>
+    <p id="bookmarkActionsTitle" class="bookmark-actions-title"></p>
+    <button type="button" role="menuitem" data-action="open-background">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M14 4h6v6M20 4l-9 9"></path>
+        <path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"></path>
+      </svg>
+      <span>在后台标签页打开</span>
+      <kbd data-background-shortcut>Ctrl Enter</kbd>
+    </button>
+    <button type="button" role="menuitem" data-action="edit">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m4 16-.8 4.8L8 20l11-11-4-4L4 16Z"></path>
+        <path d="m13 7 4 4"></path>
+      </svg>
+      <span>编辑书签</span>
+    </button>
+    <div class="bookmark-actions-divider" role="separator"></div>
+    <button class="danger-menu-item" type="button" role="menuitem" data-action="delete">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
+      </svg>
+      <span>删除书签</span>
+    </button>
   </div>
 
   <div id="settingsPanel" class="settings-panel" aria-hidden="true" hidden>
@@ -206,7 +233,7 @@
 
       <div class="settings-footer">
         <span>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></span>
-        <span>v2.1.0</span>
+        <span>v2.2.0</span>
       </div>
     </aside>
   </div>
@@ -228,6 +255,39 @@
     </section>
   </div>
 
+  <div id="bookmarkEditor" class="bookmark-editor" aria-hidden="true" hidden>
+    <form id="bookmarkEditorForm" class="bookmark-editor-content" role="dialog" aria-modal="true" aria-labelledby="bookmarkEditorTitle">
+      <div class="bookmark-editor-header">
+        <div>
+          <span class="editor-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="m4 16-.8 4.8L8 20l11-11-4-4L4 16Z"></path>
+              <path d="m13 7 4 4"></path>
+            </svg>
+          </span>
+          <h2 id="bookmarkEditorTitle">编辑书签</h2>
+        </div>
+        <button id="closeBookmarkEditor" class="icon-button" type="button" aria-label="关闭编辑器">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 7 10 10M17 7 7 17"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="bookmark-editor-fields">
+        <label for="bookmarkTitleInput">名称</label>
+        <input id="bookmarkTitleInput" type="text" maxlength="255" required>
+        <label for="bookmarkUrlInput">网址</label>
+        <input id="bookmarkUrlInput" type="text" maxlength="4096" inputmode="url" autocapitalize="off" spellcheck="false" required>
+        <p id="bookmarkEditorError" class="bookmark-editor-error" role="alert" hidden></p>
+      </div>
+      <div class="bookmark-editor-actions">
+        <button id="cancelBookmarkEditor" class="confirm-cancel-button" type="button">取消</button>
+        <button id="saveBookmarkEditor" class="editor-save-button" type="submit">保存修改</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="search.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

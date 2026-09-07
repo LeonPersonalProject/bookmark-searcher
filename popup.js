@@ -11,9 +11,14 @@ let settingsAnimationGeneration = 0;
 let historySelectedIndex = -1;
 let recentBookmarks = [];
 let searchHistory = [];
+let usageStats = {};
 let lastFocusedElement = null;
 let confirmLastFocusedElement = null;
 let confirmResolver = null;
+let activeActionBookmark = null;
+let actionMenuLastFocusedElement = null;
+let editingBookmarkId = null;
+let bookmarkEditorReturnFocus = null;
 let settings = {
   themeMode: 'system',
   colorTheme: 'classic',
@@ -23,6 +28,11 @@ let settings = {
 
 const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+const {
+  parseSearchQuery,
+  prepareSearchItem,
+  searchAndRank
+} = window.BookmarkSearchCore;
 
 // ==================== DOM 元素引用 ====================
 const searchInput = document.getElementById('searchInput');
@@ -56,6 +66,17 @@ const confirmTitle = document.getElementById('confirmTitle');
 const confirmMessage = document.getElementById('confirmMessage');
 const confirmCancelButton = document.getElementById('confirmCancelButton');
 const confirmActionButton = document.getElementById('confirmActionButton');
+const bookmarkActions = document.getElementById('bookmarkActions');
+const bookmarkActionsTitle = document.getElementById('bookmarkActionsTitle');
+const bookmarkEditor = document.getElementById('bookmarkEditor');
+const bookmarkEditorForm = document.getElementById('bookmarkEditorForm');
+const closeBookmarkEditor = document.getElementById('closeBookmarkEditor');
+const cancelBookmarkEditor = document.getElementById('cancelBookmarkEditor');
+const saveBookmarkEditor = document.getElementById('saveBookmarkEditor');
+const bookmarkTitleInput = document.getElementById('bookmarkTitleInput');
+const bookmarkUrlInput = document.getElementById('bookmarkUrlInput');
+const bookmarkEditorError = document.getElementById('bookmarkEditorError');
+const backgroundShortcutLabels = document.querySelectorAll('[data-background-shortcut]');
 
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -65,12 +86,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   searchInput.focus();
 
   try {
-    await Promise.all([loadSettings(), loadHistory()]);
+    const storageResults = await Promise.allSettled([loadSettings(), loadHistory()]);
+    showFaviconToggle.checked = settings.showFavicon;
+    fuzzySearchToggle.checked = settings.fuzzySearch;
+    applyTheme();
     await loadBookmarks();
     displayRecentBookmarks();
     showLoading(false);
     updateView();
-    createContextMenu();
+
+    if (storageResults.some(result => result.status === 'rejected')) {
+      console.warn('部分本地设置读取失败:', storageResults);
+      showError('部分偏好未能读取，本次将使用默认设置');
+    }
   } catch (error) {
     console.error('初始化失败:', error);
     showLoading(false);
@@ -125,6 +153,26 @@ function bindEventListeners() {
     }
   });
   confirmDialog.addEventListener('keydown', handleConfirmationKeydown);
+  bookmarkActions.addEventListener('click', handleBookmarkAction);
+  bookmarkActions.addEventListener('keydown', handleBookmarkActionsKeydown);
+  bookmarkEditorForm.addEventListener('submit', saveBookmarkChanges);
+  bookmarkEditor.addEventListener('keydown', handleBookmarkEditorKeydown);
+  closeBookmarkEditor.addEventListener('click', () => closeBookmarkEditorDialog());
+  cancelBookmarkEditor.addEventListener('click', () => closeBookmarkEditorDialog());
+  bookmarkEditor.addEventListener('click', event => {
+    if (event.target === bookmarkEditor) {
+      closeBookmarkEditorDialog();
+    }
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!bookmarkActions.hidden
+      && !bookmarkActions.contains(event.target)
+      && !event.target.closest('.bookmark-action-trigger')) {
+      closeBookmarkActions(false);
+    }
+  });
+  contentArea.addEventListener('scroll', () => closeBookmarkActions(false), { passive: true });
+  window.addEventListener('resize', () => closeBookmarkActions(false));
   systemThemeQuery.addEventListener('change', () => {
     if (settings.themeMode === 'system') {
       applyTheme();
@@ -135,6 +183,9 @@ function bindEventListeners() {
 function updateShortcutLabel() {
   const isMac = navigator.platform.toLowerCase().includes('mac');
   searchShortcut.textContent = isMac ? '⌘ ⇧ K' : 'Ctrl ⇧ K';
+  backgroundShortcutLabels.forEach(label => {
+    label.textContent = isMac ? '⌘ Enter' : 'Ctrl Enter';
+  });
 }
 
 // ==================== 书签数据 ====================
@@ -171,23 +222,23 @@ function flattenBookmarks(nodes, path = '', parentId = null) {
     const currentPath = path ? `${path} > ${node.title}` : node.title;
 
     if (node.url) {
-      items.push({
+      items.push(prepareSearchItem({
         id: node.id,
         type: 'bookmark',
         title: node.title,
         url: node.url,
         path: path || '根目录',
         parentId
-      });
+      }));
     } else if (node.children) {
-      items.push({
+      items.push(prepareSearchItem({
         id: node.id,
         type: 'folder',
         title: node.title,
         path: path || '根目录',
         parentId,
         childCount: countChildren(node.children)
-      });
+      }));
 
       items = items.concat(flattenBookmarks(node.children, currentPath, node.id));
     }
@@ -228,98 +279,55 @@ function clearSearch() {
 }
 
 function updateView() {
-  const keyword = searchInput.value.trim().toLowerCase();
-  let itemsToDisplay;
+  const query = parseSearchQuery(searchInput.value);
+  const sourceItems = currentFolderId === null
+    ? (query.isEmpty ? allItems.filter(item => item.parentId === null) : allItems)
+    : allItems.filter(item => item.parentId === currentFolderId);
+  let itemsToDisplay = query.isEmpty
+    ? [...sourceItems]
+    : searchAndRank(sourceItems, query, {
+        fuzzySearch: settings.fuzzySearch,
+        usageStats
+      });
 
-  if (currentFolderId === null) {
-    itemsToDisplay = keyword
-      ? searchItems(allItems, keyword)
-      : allItems.filter(item => item.parentId === null);
-  } else {
-    itemsToDisplay = allItems.filter(item => item.parentId === currentFolderId);
-    if (keyword) {
-      itemsToDisplay = searchItems(itemsToDisplay, keyword);
-    }
+  if (query.isEmpty) {
+    itemsToDisplay.sort(compareItems);
   }
 
-  itemsToDisplay.sort((first, second) => compareItems(first, second, keyword));
   selectedIndex = -1;
   searchInput.removeAttribute('aria-activedescendant');
-  displayItems(itemsToDisplay, keyword);
-  updateStats(itemsToDisplay.length, keyword);
+  displayItems(itemsToDisplay, query);
+  updateStats(itemsToDisplay.length, query);
   updateNavigation();
   contentArea.scrollTop = 0;
 }
 
-function searchItems(items, keyword) {
-  if (!keyword) return items;
-
-  return items.filter(item => {
-    const title = item.title.toLowerCase();
-    const url = item.url ? item.url.toLowerCase() : '';
-    const exactMatch = title.includes(keyword) || url.includes(keyword);
-
-    if (!settings.fuzzySearch) return exactMatch;
-    return exactMatch || fuzzyMatch(title, keyword) > 0 || fuzzyMatch(url, keyword) > 0;
-  });
-}
-
-function compareItems(first, second, keyword) {
-  if (!keyword && first.type !== second.type) {
+function compareItems(first, second) {
+  if (first.type !== second.type) {
     return first.type === 'folder' ? -1 : 1;
-  }
-
-  if (keyword) {
-    const scoreDifference = getMatchRank(first, keyword) - getMatchRank(second, keyword);
-    if (scoreDifference !== 0) return scoreDifference;
   }
 
   return first.title.localeCompare(second.title, 'zh-CN', { sensitivity: 'base' });
 }
 
-function getMatchRank(item, keyword) {
-  const title = item.title.toLowerCase();
-  const url = item.url ? item.url.toLowerCase() : '';
-
-  if (title.startsWith(keyword)) return 0;
-  if (title.includes(keyword)) return 1;
-  if (url.includes(keyword)) return 2;
-  if (fuzzyMatch(title, keyword) > 0) return 3;
-  return 4;
-}
-
-function fuzzyMatch(text, pattern) {
-  if (!text || !pattern) return 0;
-
-  let score = 0;
-  let patternIndex = 0;
-  let consecutiveMatches = 0;
-
-  for (let textIndex = 0; textIndex < text.length && patternIndex < pattern.length; textIndex++) {
-    if (text[textIndex] === pattern[patternIndex]) {
-      consecutiveMatches++;
-      score += 1 + consecutiveMatches;
-      patternIndex++;
-    } else {
-      consecutiveMatches = 0;
-    }
-  }
-
-  return patternIndex === pattern.length ? score : 0;
-}
-
 // ==================== 结果渲染 ====================
-function displayItems(items, keyword = '') {
+function displayItems(items, query = parseSearchQuery('')) {
   resultsContainer.innerHTML = '';
 
-  const showRecent = !keyword && currentFolderId === null && recentBookmarks.length > 0;
+  const showRecent = query.isEmpty && currentFolderId === null && recentBookmarks.length > 0;
   recentSection.hidden = !showRecent;
   emptyState.hidden = items.length > 0;
   resultsSection.hidden = items.length === 0;
 
-  if (keyword) {
+  if (!query.isEmpty) {
     resultsTitle.textContent = '搜索结果';
-    resultsMeta.textContent = settings.fuzzySearch ? '模糊匹配' : '标题与网址';
+    if (query.domains.length > 0) {
+      resultsMeta.textContent = '域名筛选';
+    } else if (query.terms.length > 1) {
+      resultsMeta.textContent = `${query.terms.length} 个关键词`;
+    } else {
+      resultsMeta.textContent = settings.fuzzySearch ? '模糊匹配' : '标题、网址与路径';
+    }
   } else if (currentFolderId === null) {
     resultsTitle.textContent = '浏览';
     resultsMeta.textContent = '文件夹优先';
@@ -329,18 +337,19 @@ function displayItems(items, keyword = '') {
   }
 
   items.forEach((item, index) => {
-    resultsContainer.appendChild(createItemElement(item, keyword, index));
+    resultsContainer.appendChild(createItemElement(item, query, index));
   });
 }
 
-function createItemElement(item, keyword, index) {
+function createItemElement(item, query, index) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = item.type === 'folder' ? 'bookmark-item folder-item' : 'bookmark-item';
   button.dataset.index = index;
+  button.dataset.itemId = item.id;
   button.id = `result-item-${index}`;
 
-  const highlightedTitle = highlightText(item.title, keyword);
+  const highlightedTitle = highlightText(item.title, query.terms);
 
   if (item.type === 'folder') {
     button.setAttribute('aria-label', `进入文件夹 ${item.title}，包含 ${item.childCount} 个书签`);
@@ -373,9 +382,8 @@ function createItemElement(item, keyword, index) {
       <span class="item-icon">${iconContent}</span>
       <span class="item-copy">
         <span class="bookmark-title">${highlightedTitle}</span>
-        <span class="bookmark-meta">${highlightText(displayUrl, keyword)} · ${escapeHtml(item.path)}</span>
+        <span class="bookmark-meta">${highlightText(displayUrl, query.terms)} · ${escapeHtml(item.path)}</span>
       </span>
-      <span class="item-trailing">${iconSvg('external-link')}</span>
     `;
 
     const favicon = button.querySelector('.bookmark-favicon');
@@ -386,7 +394,7 @@ function createItemElement(item, keyword, index) {
     }
 
     button.addEventListener('click', () => {
-      recordSearchKeyword();
+      recordSearchKeyword({ persist: false });
       openBookmark(item.url, item);
     });
 
@@ -394,6 +402,24 @@ function createItemElement(item, keyword, index) {
       event.preventDefault();
       showContextMenu(event, item);
     });
+
+    const row = document.createElement('div');
+    row.className = 'bookmark-row';
+    row.appendChild(button);
+
+    const actionTrigger = document.createElement('button');
+    actionTrigger.type = 'button';
+    actionTrigger.className = 'bookmark-action-trigger';
+    actionTrigger.title = '更多操作';
+    actionTrigger.setAttribute('aria-label', `${item.title} 的更多操作`);
+    actionTrigger.innerHTML = iconSvg('more');
+    actionTrigger.addEventListener('click', event => {
+      event.stopPropagation();
+      openBookmarkActions(item, { anchor: actionTrigger });
+    });
+    row.appendChild(actionTrigger);
+
+    return row;
   }
 
   return button;
@@ -423,11 +449,16 @@ function getSiteInitial(bookmark) {
   return source.charAt(0).toUpperCase();
 }
 
-function highlightText(text, keyword) {
+function highlightText(text, keywords) {
   const value = String(text);
-  if (!keyword) return escapeHtml(value);
+  const normalizedKeywords = [...new Set(
+    (Array.isArray(keywords) ? keywords : [keywords])
+      .map(keyword => String(keyword || '').trim())
+      .filter(Boolean)
+  )].sort((first, second) => second.length - first.length);
+  if (normalizedKeywords.length === 0) return escapeHtml(value);
 
-  const regex = new RegExp(`(${escapeRegExp(keyword)})`, 'gi');
+  const regex = new RegExp(`(${normalizedKeywords.map(escapeRegExp).join('|')})`, 'gi');
   return value.split(regex).map((part, index) => {
     const escapedPart = escapeHtml(part);
     return index % 2 === 1 ? `<mark class="highlight">${escapedPart}</mark>` : escapedPart;
@@ -451,7 +482,8 @@ function iconSvg(name) {
     'chevron-right': '<path d="m9 18 6-6-6-6"></path>',
     'external-link': '<path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"></path>',
     history: '<path d="M4.5 9A8 8 0 1 1 4 15"></path><path d="M4 4v5h5M12 8v4l3 2"></path>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>'
+    trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>',
+    more: '<circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle>'
   };
 
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
@@ -518,7 +550,19 @@ function handleKeyNavigation(event) {
 
     case 'Enter':
       event.preventDefault();
-      bookmarkItems[selectedIndex >= 0 ? selectedIndex : 0].click();
+      {
+        const selectedItem = bookmarkItems[selectedIndex >= 0 ? selectedIndex : 0];
+        const item = allItems.find(candidate => candidate.id === selectedItem.dataset.itemId);
+        const openInBackground = (event.ctrlKey || event.metaKey) && item?.type === 'bookmark';
+        const openInCurrentTab = event.shiftKey && item?.type === 'bookmark';
+
+        if (openInBackground || openInCurrentTab) {
+          recordSearchKeyword({ persist: false });
+          openBookmark(item.url, item, openInCurrentTab ? 'current' : 'background');
+        } else {
+          selectedItem.click();
+        }
+      }
       break;
   }
 }
@@ -608,8 +652,8 @@ function enterFolder(folderId) {
   navigateToFolder(folderId);
 }
 
-function updateStats(displayedCount, keyword) {
-  if (keyword) {
+function updateStats(displayedCount, query) {
+  if (!query.isEmpty) {
     resultCount.textContent = `${displayedCount} 项`;
   } else if (currentFolderId === null) {
     resultCount.textContent = `${allBookmarks.length} 个书签`;
@@ -619,14 +663,37 @@ function updateStats(displayedCount, keyword) {
 }
 
 // ==================== 最近使用 ====================
-function openBookmark(url, bookmark) {
-  chrome.tabs.create({ url });
-  addToRecentBookmarks(bookmark);
+async function openBookmark(url, bookmark, disposition = 'foreground') {
+  try {
+    await addToRecentBookmarks(bookmark);
+  } catch (error) {
+    console.error('保存使用记录失败:', error);
+  }
+
+  if (disposition === 'current') {
+    chrome.tabs.update({ url });
+  } else {
+    chrome.tabs.create({ url, active: disposition !== 'background' });
+  }
 }
 
 async function addToRecentBookmarks(bookmark) {
+  const previousUsage = usageStats[bookmark.id] || {};
+  usageStats[bookmark.id] = {
+    count: (Number(previousUsage.count) || 0) + 1,
+    lastUsed: Date.now()
+  };
+
+  const recentBookmark = {
+    id: bookmark.id,
+    type: 'bookmark',
+    title: bookmark.title,
+    url: bookmark.url,
+    path: bookmark.path,
+    parentId: bookmark.parentId
+  };
   recentBookmarks = recentBookmarks.filter(item => item.id !== bookmark.id);
-  recentBookmarks.unshift(bookmark);
+  recentBookmarks.unshift(recentBookmark);
   recentBookmarks = recentBookmarks.slice(0, 4);
   await saveHistory();
   displayRecentBookmarks();
@@ -665,19 +732,27 @@ function displayRecentBookmarks() {
     }
 
     button.addEventListener('click', () => openBookmark(bookmark.url, bookmark));
+    button.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      showContextMenu(event, bookmark);
+    });
     recentBookmarksEl.appendChild(button);
   });
 }
 
 // ==================== 搜索历史 ====================
-function recordSearchKeyword() {
+function recordSearchKeyword({ persist = true } = {}) {
   const keyword = searchInput.value.trim();
   if (!keyword) return;
 
   searchHistory = searchHistory.filter(item => item.toLowerCase() !== keyword.toLowerCase());
   searchHistory.unshift(keyword);
   searchHistory = searchHistory.slice(0, 8);
-  saveHistory();
+  if (persist) {
+    saveHistory().catch(error => {
+      console.error('保存搜索历史失败:', error);
+    });
+  }
 }
 
 function showSearchHistory() {
@@ -754,9 +829,271 @@ async function clearSearchHistory() {
   if (!confirmed) return;
 
   searchHistory = [];
-  await saveHistory();
+  try {
+    await saveHistory();
+    hideSearchHistory();
+    showError('搜索历史已清空', 'success');
+  } catch (error) {
+    console.error('清空搜索历史失败:', error);
+    showError('清空失败，请稍后重试');
+  }
+}
+
+// ==================== 书签操作与编辑 ====================
+function openBookmarkActions(bookmark, { anchor = null, clientX = null, clientY = null } = {}) {
+  closeBookmarkActions(false);
   hideSearchHistory();
-  showError('搜索历史已清空', 'success');
+  activeActionBookmark = bookmark;
+  actionMenuLastFocusedElement = anchor || document.activeElement;
+  bookmarkActionsTitle.textContent = bookmark.title;
+  bookmarkActions.hidden = false;
+  bookmarkActions.setAttribute('aria-hidden', 'false');
+
+  const menuRect = bookmarkActions.getBoundingClientRect();
+  const viewportPadding = 8;
+  let left;
+  let top;
+
+  if (anchor) {
+    const anchorRect = anchor.getBoundingClientRect();
+    left = anchorRect.right - menuRect.width;
+    top = anchorRect.bottom + 6;
+    if (top + menuRect.height > window.innerHeight - viewportPadding) {
+      top = anchorRect.top - menuRect.height - 6;
+    }
+  } else {
+    left = Number.isFinite(clientX) ? clientX : viewportPadding;
+    top = Number.isFinite(clientY) ? clientY : viewportPadding;
+    if (top + menuRect.height > window.innerHeight - viewportPadding) {
+      top -= menuRect.height;
+    }
+  }
+
+  bookmarkActions.style.left = `${Math.max(viewportPadding, Math.min(left, window.innerWidth - menuRect.width - viewportPadding))}px`;
+  bookmarkActions.style.top = `${Math.max(viewportPadding, Math.min(top, window.innerHeight - menuRect.height - viewportPadding))}px`;
+  bookmarkActions.querySelector('[role="menuitem"]')?.focus();
+}
+
+function closeBookmarkActions(restoreFocus = true) {
+  if (bookmarkActions.hidden) return;
+
+  const focusTarget = actionMenuLastFocusedElement;
+  bookmarkActions.hidden = true;
+  bookmarkActions.setAttribute('aria-hidden', 'true');
+  activeActionBookmark = null;
+  actionMenuLastFocusedElement = null;
+
+  if (restoreFocus && focusTarget instanceof HTMLElement && document.contains(focusTarget)) {
+    focusTarget.focus();
+  }
+}
+
+async function handleBookmarkAction(event) {
+  const actionButton = event.target.closest('[data-action]');
+  if (!actionButton || !activeActionBookmark) return;
+
+  const action = actionButton.dataset.action;
+  const bookmark = activeActionBookmark;
+  const returnFocus = actionMenuLastFocusedElement;
+  closeBookmarkActions(false);
+
+  if (action === 'open-background') {
+    recordSearchKeyword({ persist: false });
+    await openBookmark(bookmark.url, bookmark, 'background');
+    if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
+      returnFocus.focus();
+    } else {
+      searchInput.focus();
+    }
+  } else if (action === 'edit') {
+    openBookmarkEditor(bookmark, returnFocus);
+  } else if (action === 'delete') {
+    if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
+      returnFocus.focus();
+    }
+    await deleteBookmarkWithConfirmation(bookmark);
+  }
+}
+
+function handleBookmarkActionsKeydown(event) {
+  const menuItems = [...bookmarkActions.querySelectorAll('[role="menuitem"]')];
+  const currentIndex = menuItems.indexOf(document.activeElement);
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeBookmarkActions();
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    menuItems[(currentIndex + 1) % menuItems.length]?.focus();
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    menuItems[(currentIndex - 1 + menuItems.length) % menuItems.length]?.focus();
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    menuItems[0]?.focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    menuItems[menuItems.length - 1]?.focus();
+  } else if (event.key === 'Tab') {
+    closeBookmarkActions(false);
+  }
+}
+
+function showContextMenu(event, bookmark) {
+  openBookmarkActions(bookmark, {
+    clientX: event.clientX,
+    clientY: event.clientY
+  });
+}
+
+function openBookmarkEditor(bookmark, returnFocus = null) {
+  editingBookmarkId = bookmark.id;
+  bookmarkEditorReturnFocus = returnFocus;
+  bookmarkTitleInput.value = bookmark.title;
+  bookmarkUrlInput.value = bookmark.url;
+  bookmarkEditorError.hidden = true;
+  bookmarkEditorError.textContent = '';
+  saveBookmarkEditor.disabled = false;
+  saveBookmarkEditor.textContent = '保存修改';
+  bookmarkEditor.hidden = false;
+  bookmarkEditor.setAttribute('aria-hidden', 'false');
+
+  queueMicrotask(() => {
+    bookmarkTitleInput.focus();
+    bookmarkTitleInput.select();
+  });
+}
+
+function closeBookmarkEditorDialog(restoreFocus = true) {
+  if (bookmarkEditor.hidden) return;
+
+  const focusTarget = bookmarkEditorReturnFocus;
+  bookmarkEditor.hidden = true;
+  bookmarkEditor.setAttribute('aria-hidden', 'true');
+  editingBookmarkId = null;
+  bookmarkEditorReturnFocus = null;
+
+  if (restoreFocus && focusTarget instanceof HTMLElement && document.contains(focusTarget)) {
+    focusTarget.focus();
+  } else if (restoreFocus) {
+    searchInput.focus();
+  }
+}
+
+function handleBookmarkEditorKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeBookmarkEditorDialog();
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+
+  const focusableElements = bookmarkEditor.querySelectorAll('button:not([disabled]), input:not([disabled])');
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
+}
+
+async function saveBookmarkChanges(event) {
+  event.preventDefault();
+  const title = bookmarkTitleInput.value.trim();
+  const url = bookmarkUrlInput.value.trim();
+
+  if (!title) {
+    showBookmarkEditorError('请输入书签名称。');
+    bookmarkTitleInput.focus();
+    return;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    if (!parsedUrl.protocol) throw new Error('missing protocol');
+  } catch {
+    showBookmarkEditorError('请输入完整网址，例如 https://example.com。');
+    bookmarkUrlInput.focus();
+    return;
+  }
+
+  saveBookmarkEditor.disabled = true;
+  saveBookmarkEditor.textContent = '保存中…';
+
+  try {
+    const updatedBookmark = await updateBookmarkById(editingBookmarkId, { title, url });
+    recentBookmarks = recentBookmarks.map(bookmark => (
+      bookmark.id === updatedBookmark.id
+        ? { ...bookmark, title: updatedBookmark.title, url: updatedBookmark.url }
+        : bookmark
+    ));
+    await Promise.all([saveHistory(), loadBookmarks()]);
+    closeBookmarkEditorDialog(false);
+    updateView();
+    searchInput.focus();
+    showError('书签已更新', 'success');
+  } catch (error) {
+    console.error('更新书签失败:', error);
+    showBookmarkEditorError('保存失败，请稍后重试。');
+    saveBookmarkEditor.disabled = false;
+    saveBookmarkEditor.textContent = '保存修改';
+  }
+}
+
+function showBookmarkEditorError(message) {
+  bookmarkEditorError.textContent = message;
+  bookmarkEditorError.hidden = false;
+}
+
+function updateBookmarkById(bookmarkId, changes) {
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.update(bookmarkId, changes, updatedBookmark => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(updatedBookmark);
+      }
+    });
+  });
+}
+
+async function deleteBookmarkWithConfirmation(bookmark) {
+  const confirmed = await requestConfirmation({
+    title: '删除这个书签？',
+    message: `“${bookmark.title}”将从浏览器书签中移除，此操作无法撤销。`,
+    confirmLabel: '删除'
+  });
+  if (!confirmed) return;
+
+  try {
+    await removeBookmarkById(bookmark.id);
+    recentBookmarks = recentBookmarks.filter(item => item.id !== bookmark.id);
+    delete usageStats[bookmark.id];
+    await Promise.all([saveHistory(), loadBookmarks()]);
+    displayRecentBookmarks();
+    updateView();
+    showError('书签已删除', 'success');
+  } catch (error) {
+    console.error('删除书签失败:', error);
+    showError('删除失败，请稍后重试');
+  }
+}
+
+function removeBookmarkById(bookmarkId) {
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.remove(bookmarkId, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 // ==================== 设置面板 ====================
@@ -765,6 +1102,7 @@ function openSettings() {
 
   const generation = ++settingsAnimationGeneration;
   cancelSettingsAnimations();
+  closeBookmarkActions(false);
   hideSearchHistory();
   lastFocusedElement = document.activeElement;
   settingsPanel.hidden = false;
@@ -895,13 +1233,13 @@ function handleSettingsKeydown(event) {
 function changeThemeMode(event) {
   settings.themeMode = event.target.value;
   applyTheme();
-  saveSettings();
+  persistSettings();
 }
 
 function changeColorTheme(event) {
   settings.colorTheme = event.target.value;
   applyTheme();
-  saveSettings();
+  persistSettings();
 }
 
 function applyTheme() {
@@ -921,14 +1259,14 @@ function applyTheme() {
 
 function toggleFavicon() {
   settings.showFavicon = showFaviconToggle.checked;
-  saveSettings();
+  persistSettings();
   displayRecentBookmarks();
   updateView();
 }
 
 function toggleFuzzySearch() {
   settings.fuzzySearch = fuzzySearchToggle.checked;
-  saveSettings();
+  persistSettings();
   updateView();
 }
 
@@ -942,16 +1280,27 @@ async function clearHistory() {
 
   recentBookmarks = [];
   searchHistory = [];
-  await saveHistory();
-  displayRecentBookmarks();
-  updateView();
-  showError('历史记录已清除', 'success');
+  usageStats = {};
+  try {
+    await saveHistory();
+    displayRecentBookmarks();
+    updateView();
+    showError('历史记录已清除', 'success');
+  } catch (error) {
+    console.error('清除历史记录失败:', error);
+    showError('清除失败，请稍后重试');
+  }
 }
 
 // ==================== 设置与历史存储 ====================
 async function loadSettings() {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     chrome.storage.sync.get(['settings'], result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
       const savedSettings = result.settings || {};
       const migratedTheme = ['system', 'light', 'dark'].includes(savedSettings.themeMode)
         ? savedSettings.themeMode
@@ -980,24 +1329,59 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  return new Promise(resolve => {
-    chrome.storage.sync.set({ settings }, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set({ settings }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function persistSettings() {
+  saveSettings().catch(error => {
+    console.error('保存设置失败:', error);
+    showError('设置未能保存，请稍后重试');
   });
 }
 
 async function loadHistory() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(['recentBookmarks', 'searchHistory'], result => {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['recentBookmarks', 'searchHistory', 'usageStats'], result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
       recentBookmarks = Array.isArray(result.recentBookmarks) ? result.recentBookmarks : [];
       searchHistory = Array.isArray(result.searchHistory) ? result.searchHistory : [];
+      usageStats = result.usageStats
+        && typeof result.usageStats === 'object'
+        && !Array.isArray(result.usageStats)
+        ? result.usageStats
+        : {};
       resolve();
     });
   });
 }
 
 async function saveHistory() {
-  return new Promise(resolve => {
-    chrome.storage.local.set({ recentBookmarks, searchHistory }, resolve);
+  return new Promise((resolve, reject) => {
+    usageStats = Object.fromEntries(
+      Object.entries(usageStats)
+        .filter(([, usage]) => usage && typeof usage === 'object')
+        .sort((first, second) => (second[1].lastUsed || 0) - (first[1].lastUsed || 0))
+        .slice(0, 250)
+    );
+    chrome.storage.local.set({ recentBookmarks, searchHistory, usageStats }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
   });
 }
 
@@ -1081,25 +1465,4 @@ function handleConfirmationKeydown(event) {
     event.preventDefault();
     confirmCancelButton.focus();
   }
-}
-
-// ==================== 浏览器右键菜单 ====================
-function createContextMenu() {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: 'editBookmark',
-      title: '编辑书签',
-      contexts: ['all']
-    });
-
-    chrome.contextMenus.create({
-      id: 'deleteBookmark',
-      title: '删除书签',
-      contexts: ['all']
-    });
-  });
-}
-
-function showContextMenu(event, bookmark) {
-  console.log('Right click on:', bookmark, event.clientX, event.clientY);
 }

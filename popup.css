@@ -791,6 +791,11 @@ svg {
   border-top: 1px solid var(--border);
 }
 
+.bookmark-row {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
 .bookmark-item {
   position: relative;
   display: grid;
@@ -810,7 +815,13 @@ svg {
   transition: background-color 120ms ease;
 }
 
-.bookmark-item:hover {
+.bookmark-row .bookmark-item {
+  padding-right: 52px;
+  border-bottom: 0;
+}
+
+.bookmark-item:hover,
+.bookmark-row:hover .bookmark-item {
   background: var(--surface-hover);
 }
 
@@ -871,11 +882,121 @@ svg {
   height: 15px;
 }
 
+.bookmark-action-trigger {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+
+.bookmark-row:hover .bookmark-action-trigger,
+.bookmark-row:focus-within .bookmark-action-trigger {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bookmark-action-trigger:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.bookmark-action-trigger svg {
+  width: 17px;
+  height: 17px;
+}
+
 .highlight {
   border-radius: 2px;
   color: var(--accent);
   background: var(--accent-soft);
   font-weight: 700;
+}
+
+/* ==================== 书签操作菜单 ==================== */
+.bookmark-actions {
+  position: fixed;
+  z-index: 160;
+  width: 226px;
+  padding: 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  transform-origin: top right;
+  animation: popover-in 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bookmark-actions-title {
+  padding: 7px 9px 8px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-actions button {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.bookmark-actions button:hover,
+.bookmark-actions button:focus-visible {
+  background: var(--surface-hover);
+}
+
+.bookmark-actions button svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+}
+
+.bookmark-actions button kbd {
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.bookmark-actions .danger-menu-item,
+.bookmark-actions .danger-menu-item svg {
+  color: var(--danger);
+}
+
+.bookmark-actions .danger-menu-item:hover,
+.bookmark-actions .danger-menu-item:focus-visible {
+  background: var(--danger-soft);
+}
+
+.bookmark-actions-divider {
+  height: 1px;
+  margin: 5px;
+  background: var(--border);
 }
 
 /* ==================== 加载与空状态 ==================== */
@@ -944,13 +1065,13 @@ svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 13px;
+  gap: 10px;
   min-height: 38px;
   padding: 8px 12px;
   border-top: 1px solid var(--border);
   color: var(--text-tertiary);
   background: var(--surface-subtle);
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .shortcut-footer span {
@@ -1447,6 +1568,133 @@ body[data-color-theme="candy"] .search-box {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* ==================== 书签编辑器 ==================== */
+.bookmark-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--overlay);
+  animation: overlay-in 140ms ease-out;
+}
+
+.bookmark-editor-content {
+  width: 100%;
+  max-width: 350px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  animation: confirm-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bookmark-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bookmark-editor-header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.editor-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.bookmark-editor-header h2 {
+  align-self: center;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.bookmark-editor-fields {
+  display: grid;
+  gap: 7px;
+  padding: 17px 18px 5px;
+}
+
+.bookmark-editor-fields label {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.bookmark-editor-fields input {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: 0;
+  color: var(--text-primary);
+  background: var(--surface-subtle);
+  font-size: 12px;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.bookmark-editor-fields input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.bookmark-editor-error {
+  margin-top: 3px;
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.bookmark-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 16px 18px 18px;
+}
+
+.editor-save-button {
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.editor-save-button:hover {
+  background: var(--accent-hover);
+}
+
+.editor-save-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 @media (prefers-reduced-motion: reduce) {
