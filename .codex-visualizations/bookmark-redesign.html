@@ -1,0 +1,556 @@
+<div id="bookmark-redesign-preview">
+  <style>
+    #bookmark-redesign-preview {
+      --bs-canvas: light-dark(#eef1f6, #090b0f);
+      --bs-surface: light-dark(#ffffff, #12151b);
+      --bs-surface-raised: light-dark(#f7f8fb, #191d25);
+      --bs-text: light-dark(#171a21, #f4f5f7);
+      --bs-muted: light-dark(#72798a, #969dac);
+      --bs-line: light-dark(#e7e9ef, #292f3a);
+      --bs-accent: light-dark(#5956e9, #8b87ff);
+      --bs-accent-ink: light-dark(#ffffff, #10111a);
+      --bs-accent-soft: light-dark(#eeefff, #252648);
+      --bs-folder: light-dark(#b86f12, #f4b557);
+      --bs-folder-soft: light-dark(#fff5df, #312719);
+      --bs-hover: light-dark(#f6f7fa, #1b2028);
+      color-scheme: light dark;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--bs-text);
+    }
+
+    #bookmark-redesign-preview * {
+      box-sizing: border-box;
+    }
+
+    #bookmark-redesign-preview .bs-popup {
+      width: min(100%, 400px);
+      min-height: 590px;
+      overflow: hidden;
+      background: var(--bs-surface);
+      border: 1px solid var(--bs-line);
+      border-radius: 18px;
+      box-shadow: 0 22px 56px light-dark(rgba(28, 35, 52, 0.16), rgba(0, 0, 0, 0.48));
+    }
+
+    #bookmark-redesign-preview .bs-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px 12px;
+    }
+
+    #bookmark-redesign-preview .bs-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    #bookmark-redesign-preview .bs-brand-mark {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      color: var(--bs-accent-ink);
+      background: var(--bs-accent);
+    }
+
+    #bookmark-redesign-preview .bs-brand-mark svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    #bookmark-redesign-preview .bs-icon-button,
+    #bookmark-redesign-preview .bs-clear {
+      display: grid;
+      place-items: center;
+      border: 0;
+      color: var(--bs-muted);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    #bookmark-redesign-preview .bs-icon-button {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+    }
+
+    #bookmark-redesign-preview .bs-icon-button:hover,
+    #bookmark-redesign-preview .bs-clear:hover {
+      color: var(--bs-text);
+      background: var(--bs-hover);
+    }
+
+    #bookmark-redesign-preview .bs-search-wrap {
+      padding: 0 16px 14px;
+    }
+
+    #bookmark-redesign-preview .bs-search-shell {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 0 10px 0 14px;
+      background: var(--bs-surface-raised);
+      border: 1px solid var(--bs-line);
+      border-radius: 13px;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    #bookmark-redesign-preview .bs-search-shell:focus-within {
+      border-color: var(--bs-accent);
+      box-shadow: 0 0 0 3px light-dark(rgba(89, 86, 233, 0.12), rgba(139, 135, 255, 0.14));
+    }
+
+    #bookmark-redesign-preview .bs-search-shell > svg {
+      color: var(--bs-muted);
+    }
+
+    #bookmark-redesign-preview .bs-search-input {
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      color: var(--bs-text);
+      background: transparent;
+      font: inherit;
+    }
+
+    #bookmark-redesign-preview .bs-search-input::placeholder {
+      color: var(--bs-muted);
+    }
+
+    #bookmark-redesign-preview .bs-shortcut {
+      padding: 3px 6px;
+      border: 1px solid var(--bs-line);
+      border-radius: 6px;
+      color: var(--bs-muted);
+      background: var(--bs-surface);
+      font: inherit;
+      font-size: 11px;
+    }
+
+    #bookmark-redesign-preview .bs-clear {
+      display: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+    }
+
+    #bookmark-redesign-preview[data-searching="true"] .bs-clear {
+      display: grid;
+    }
+
+    #bookmark-redesign-preview[data-searching="true"] .bs-shortcut {
+      display: none;
+    }
+
+    #bookmark-redesign-preview .bs-context {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 35px;
+      padding: 0 16px;
+      border-top: 1px solid var(--bs-line);
+      border-bottom: 1px solid var(--bs-line);
+      color: var(--bs-muted);
+      font-size: 12px;
+    }
+
+    #bookmark-redesign-preview .bs-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--bs-text);
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-count {
+      white-space: nowrap;
+    }
+
+    #bookmark-redesign-preview .bs-scroll-area {
+      padding: 14px 10px 0;
+    }
+
+    #bookmark-redesign-preview .bs-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 9px;
+      color: var(--bs-muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-recent-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+      padding: 0 6px 16px;
+    }
+
+    #bookmark-redesign-preview .bs-recent {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      padding: 9px 10px;
+      border: 1px solid var(--bs-line);
+      border-radius: 10px;
+      color: var(--bs-text);
+      background: var(--bs-surface);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    #bookmark-redesign-preview .bs-recent:hover {
+      border-color: light-dark(#d6d8e2, #3a414e);
+      background: var(--bs-hover);
+    }
+
+    #bookmark-redesign-preview .bs-site-mark,
+    #bookmark-redesign-preview .bs-item-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: var(--bs-surface-raised);
+      color: var(--bs-accent);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-recent-copy,
+    #bookmark-redesign-preview .bs-item-copy {
+      min-width: 0;
+    }
+
+    #bookmark-redesign-preview .bs-recent-name,
+    #bookmark-redesign-preview .bs-item-title,
+    #bookmark-redesign-preview .bs-item-meta {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #bookmark-redesign-preview .bs-recent-name {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-recent-domain {
+      margin-top: 2px;
+      overflow: hidden;
+      color: var(--bs-muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+    }
+
+    #bookmark-redesign-preview .bs-list {
+      overflow: hidden;
+      border-top: 1px solid var(--bs-line);
+    }
+
+    #bookmark-redesign-preview .bs-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 58px;
+      padding: 8px 8px 8px 10px;
+      border: 0;
+      border-bottom: 1px solid var(--bs-line);
+      color: var(--bs-text);
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    #bookmark-redesign-preview .bs-item:hover,
+    #bookmark-redesign-preview .bs-item[aria-selected="true"] {
+      background: var(--bs-hover);
+    }
+
+    #bookmark-redesign-preview .bs-item[aria-selected="true"] {
+      background: var(--bs-accent-soft);
+    }
+
+    #bookmark-redesign-preview .bs-item[aria-selected="true"]::before {
+      content: "";
+      position: absolute;
+      inset: 10px auto 10px 0;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--bs-accent);
+    }
+
+    #bookmark-redesign-preview .bs-item-icon.bs-folder-icon {
+      color: var(--bs-folder);
+      background: var(--bs-folder-soft);
+    }
+
+    #bookmark-redesign-preview .bs-item-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-item-meta {
+      margin-top: 4px;
+      color: var(--bs-muted);
+      font-size: 11px;
+    }
+
+    #bookmark-redesign-preview .bs-item-side {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--bs-muted);
+      font-size: 11px;
+    }
+
+    #bookmark-redesign-preview .bs-search-view,
+    #bookmark-redesign-preview[data-searching="true"] .bs-idle-view {
+      display: none;
+    }
+
+    #bookmark-redesign-preview[data-searching="true"] .bs-search-view {
+      display: block;
+    }
+
+    #bookmark-redesign-preview .bs-empty {
+      display: none;
+      padding: 54px 22px;
+      color: var(--bs-muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    #bookmark-redesign-preview .bs-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 11px 14px;
+      color: var(--bs-muted);
+      background: var(--bs-surface-raised);
+      font-size: 11px;
+    }
+
+    #bookmark-redesign-preview .bs-footer span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #bookmark-redesign-preview .bs-footer kbd {
+      color: var(--bs-text);
+      font: inherit;
+      font-weight: 500;
+    }
+
+    #bookmark-redesign-preview .bs-live {
+      min-height: 16px;
+      padding: 0 16px 8px;
+      color: var(--bs-accent);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    @media (max-width: 360px) {
+      #bookmark-redesign-preview .bs-popup {
+        border-radius: 14px;
+      }
+
+      #bookmark-redesign-preview .bs-recent-grid {
+        grid-template-columns: 1fr;
+      }
+
+      #bookmark-redesign-preview .bs-footer {
+        gap: 8px;
+      }
+    }
+  </style>
+
+  <section class="bs-popup" aria-label="重新设计后的书签搜索弹窗示意">
+    <header class="bs-topbar">
+      <div class="bs-brand">
+        <span class="bs-brand-mark"><i data-lucide="bookmark" aria-hidden="true"></i></span>
+        <span>书签</span>
+      </div>
+      <button class="bs-icon-button" type="button" aria-label="打开设置">
+        <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
+      </button>
+    </header>
+
+    <div class="bs-search-wrap">
+      <div class="bs-search-shell">
+        <i data-lucide="search" aria-hidden="true"></i>
+        <input class="bs-search-input" type="search" placeholder="搜索标题、网址或文件夹" aria-label="搜索书签">
+        <kbd class="bs-shortcut">⌘ K</kbd>
+        <button class="bs-clear" type="button" aria-label="清空搜索">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="bs-context">
+      <div class="bs-breadcrumb">
+        <i data-lucide="library" aria-hidden="true"></i>
+        <span class="bs-context-label">全部书签</span>
+      </div>
+      <span class="bs-count">248 项</span>
+    </div>
+
+    <main class="bs-scroll-area">
+      <div class="bs-idle-view">
+        <div class="bs-section-head"><span>最近使用</span><span>4 项</span></div>
+        <div class="bs-recent-grid">
+          <button class="bs-recent" type="button">
+            <span class="bs-site-mark">F</span>
+            <span class="bs-recent-copy"><span class="bs-recent-name">Figma</span><span class="bs-recent-domain">figma.com</span></span>
+          </button>
+          <button class="bs-recent" type="button">
+            <span class="bs-site-mark">G</span>
+            <span class="bs-recent-copy"><span class="bs-recent-name">GitHub</span><span class="bs-recent-domain">github.com</span></span>
+          </button>
+          <button class="bs-recent" type="button">
+            <span class="bs-site-mark">N</span>
+            <span class="bs-recent-copy"><span class="bs-recent-name">Notion</span><span class="bs-recent-domain">notion.so</span></span>
+          </button>
+          <button class="bs-recent" type="button">
+            <span class="bs-site-mark">L</span>
+            <span class="bs-recent-copy"><span class="bs-recent-name">Linear</span><span class="bs-recent-domain">linear.app</span></span>
+          </button>
+        </div>
+
+        <div class="bs-section-head"><span>浏览</span><span>文件夹优先</span></div>
+        <div class="bs-list">
+          <button class="bs-item" type="button" aria-selected="true">
+            <span class="bs-item-icon bs-folder-icon"><i data-lucide="folder" aria-hidden="true"></i></span>
+            <span class="bs-item-copy"><span class="bs-item-title">设计资源</span><span class="bs-item-meta">图标 · 字体 · 灵感</span></span>
+            <span class="bs-item-side">42 <i data-lucide="chevron-right" aria-hidden="true"></i></span>
+          </button>
+          <button class="bs-item" type="button" aria-selected="false">
+            <span class="bs-item-icon bs-folder-icon"><i data-lucide="folder" aria-hidden="true"></i></span>
+            <span class="bs-item-copy"><span class="bs-item-title">开发文档</span><span class="bs-item-meta">前端 · API · 工具</span></span>
+            <span class="bs-item-side">68 <i data-lucide="chevron-right" aria-hidden="true"></i></span>
+          </button>
+          <button class="bs-item" type="button" aria-selected="false">
+            <span class="bs-item-icon">R</span>
+            <span class="bs-item-copy"><span class="bs-item-title">Raindrop 收藏集</span><span class="bs-item-meta">raindrop.io · 灵感库</span></span>
+            <span class="bs-item-side"><i data-lucide="arrow-up-right" aria-hidden="true"></i></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bs-search-view">
+        <div class="bs-section-head"><span>最佳匹配</span><span>标题与网址</span></div>
+        <div class="bs-list bs-search-results" role="listbox" aria-label="搜索结果"></div>
+        <div class="bs-empty">没有匹配项，试试更短的关键词</div>
+      </div>
+    </main>
+
+    <div class="bs-live" aria-live="polite"></div>
+    <footer class="bs-footer">
+      <span><kbd>↑ ↓</kbd> 选择</span>
+      <span><kbd>Enter</kbd> 打开</span>
+      <span><kbd>Esc</kbd> 清空</span>
+    </footer>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('bookmark-redesign-preview');
+      const input = root.querySelector('.bs-search-input');
+      const clear = root.querySelector('.bs-clear');
+      const resultList = root.querySelector('.bs-search-results');
+      const empty = root.querySelector('.bs-empty');
+      const count = root.querySelector('.bs-count');
+      const label = root.querySelector('.bs-context-label');
+      const live = root.querySelector('.bs-live');
+      const records = [
+        { mark: 'F', title: 'Figma Design System', meta: 'figma.com · 设计资源', url: 'figma.com' },
+        { mark: 'M', title: 'Material Design 3', meta: 'm3.material.io · 设计资源', url: 'm3.material.io' },
+        { mark: 'A', title: 'A11y Project Checklist', meta: 'a11yproject.com · 开发文档', url: 'a11yproject.com' },
+        { mark: 'R', title: 'Responsive Design Patterns', meta: 'web.dev · 前端', url: 'web.dev' },
+        { mark: 'L', title: 'Linear', meta: 'linear.app · 工作台', url: 'linear.app' }
+      ];
+      let selected = 0;
+
+      const selectRow = (index) => {
+        const rows = [...resultList.querySelectorAll('.bs-item')];
+        if (!rows.length) return;
+        selected = (index + rows.length) % rows.length;
+        rows.forEach((row, rowIndex) => row.setAttribute('aria-selected', String(rowIndex === selected)));
+      };
+
+      const render = () => {
+        const query = input.value.trim().toLowerCase();
+        root.dataset.searching = String(Boolean(query));
+        live.textContent = '';
+        if (!query) {
+          count.textContent = '248 项';
+          label.textContent = '全部书签';
+          return;
+        }
+
+        const matches = records.filter((record) => `${record.title} ${record.meta} ${record.url}`.toLowerCase().includes(query));
+        label.textContent = `搜索“${input.value.trim()}”`;
+        count.textContent = `${matches.length} 项`;
+        empty.style.display = matches.length ? 'none' : 'block';
+        resultList.style.display = matches.length ? 'block' : 'none';
+        resultList.innerHTML = matches.map((record, index) => `
+          <button class="bs-item" type="button" role="option" aria-selected="${index === 0}">
+            <span class="bs-item-icon">${record.mark}</span>
+            <span class="bs-item-copy"><span class="bs-item-title">${record.title}</span><span class="bs-item-meta">${record.meta}</span></span>
+            <span class="bs-item-side"><i data-lucide="arrow-up-right" aria-hidden="true"></i></span>
+          </button>
+        `).join('');
+        selected = 0;
+        resultList.querySelectorAll('.bs-item').forEach((row, index) => {
+          row.addEventListener('click', () => {
+            selectRow(index);
+            live.textContent = `将打开：${matches[index].title}`;
+          });
+        });
+        if (typeof lucide !== 'undefined') lucide.createIcons({ attrs: { width: 16, height: 16 } });
+      };
+
+      input.addEventListener('input', render);
+      input.addEventListener('keydown', (event) => {
+        const rows = [...resultList.querySelectorAll('.bs-item')];
+        if (event.key === 'ArrowDown' && rows.length) {
+          event.preventDefault();
+          selectRow(selected + 1);
+        } else if (event.key === 'ArrowUp' && rows.length) {
+          event.preventDefault();
+          selectRow(selected - 1);
+        } else if (event.key === 'Enter' && rows.length) {
+          event.preventDefault();
+          rows[selected].click();
+        } else if (event.key === 'Escape') {
+          input.value = '';
+          render();
+        }
+      });
+      clear.addEventListener('click', () => {
+        input.value = '';
+        render();
+        input.focus();
+      });
+    })();
+  </script>
+</div>

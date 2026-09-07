@@ -7,120 +7,227 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <!-- 主容器 -->
   <div class="container">
-    <!-- 标题区域 -->
-    <div class="header">
-      <h1>🔖 书签智能搜索</h1>
-      <button id="settingsButton" class="icon-button" aria-label="设置" title="设置">
-        <span>⚙️</span>
-      </button>
-    </div>
-
-    <!-- 搜索输入框 -->
-    <div class="search-box">
-      <input
-        type="text"
-        id="searchInput"
-        placeholder="输入关键词搜索书签..."
-        autofocus
-        role="searchbox"
-        aria-label="搜索书签"
-      >
-      <button id="clearSearchButton" class="clear-search-button" style="display: none;" aria-label="清空搜索" title="清空">
-        <span>✕</span>
-      </button>
-      <span class="search-icon">🔍</span>
-      <!-- 搜索历史下拉 -->
-      <div id="searchHistory" class="search-history" style="display: none;"></div>
-    </div>
-
-    <!-- 统计信息和导航 -->
-    <div class="stats">
-      <button id="backButton" class="back-button" style="display: none;" aria-label="返回上一级">
-        <span class="back-icon">←</span>
-        <span>返回</span>
-      </button>
-      <span id="currentPath" class="current-path">所有书签</span>
-      <span id="resultCount" class="result-count">加载中...</span>
-    </div>
-
-    <!-- 最近访问 -->
-    <div id="recentSection" class="recent-section" style="display: none;">
-      <div class="section-title">⏱️ 最近访问</div>
-      <div id="recentBookmarks" class="recent-bookmarks"></div>
-    </div>
-
-    <!-- 加载状态 -->
-    <div id="loadingState" class="loading-state" style="display: none;">
-      <div class="skeleton-item"></div>
-      <div class="skeleton-item"></div>
-      <div class="skeleton-item"></div>
-    </div>
-
-    <!-- 搜索结果列表 -->
-    <div class="results" id="results" role="list">
-      <!-- 结果将通过 JavaScript 动态插入 -->
-    </div>
-
-    <!-- 空状态提示 -->
-    <div class="empty-state" id="emptyState" style="display: none;">
-      <p>😔 没有找到匹配的书签</p>
-      <small>尝试使用不同的关键词</small>
-      <div class="empty-tips">
-        <p>💡 小贴士：</p>
-        <ul>
-          <li>使用 <kbd>↑</kbd> <kbd>↓</kbd> 键导航</li>
-          <li>按 <kbd>Enter</kbd> 打开书签</li>
-          <li>按 <kbd>Esc</kbd> 清空搜索</li>
-        </ul>
+    <header class="header">
+      <div class="brand" aria-label="书签搜索器">
+        <span class="brand-mark">
+          <img src="logo-small.svg" alt="">
+        </span>
+        <span class="brand-name">书签</span>
       </div>
+      <button id="settingsButton" class="icon-button" type="button" aria-label="打开设置" title="设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"></path>
+        </svg>
+      </button>
+    </header>
+
+    <section class="search-section" role="search">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
+        <input
+          type="search"
+          id="searchInput"
+          placeholder="搜索标题、网址或文件夹"
+          autocomplete="off"
+          autofocus
+          aria-label="搜索书签"
+          aria-controls="results searchHistory"
+        >
+        <kbd id="searchShortcut" class="search-shortcut">Ctrl ⇧ K</kbd>
+        <button id="clearSearchButton" class="clear-search-button" type="button" aria-label="清空搜索" title="清空" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m8 8 8 8M16 8l-8 8"></path>
+          </svg>
+        </button>
+        <div id="searchHistory" class="search-history" aria-label="搜索历史" hidden></div>
+      </div>
+    </section>
+
+    <div class="context-bar">
+      <nav id="breadcrumb" class="breadcrumb" aria-label="书签路径"></nav>
+      <span id="resultCount" class="result-count" aria-live="polite">加载中…</span>
     </div>
 
-    <!-- 错误提示 -->
-    <div id="errorToast" class="error-toast" style="display: none;"></div>
+    <main id="contentArea" class="content-area">
+      <section id="recentSection" class="recent-section" aria-labelledby="recentTitle" hidden>
+        <div class="section-heading">
+          <h2 id="recentTitle">最近使用</h2>
+          <span id="recentCount" class="section-meta"></span>
+        </div>
+        <div id="recentBookmarks" class="recent-bookmarks"></div>
+      </section>
+
+      <div id="loadingState" class="loading-state" aria-label="正在加载书签">
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+        <span class="visually-hidden">正在加载书签</span>
+      </div>
+
+      <section id="resultsSection" class="results-section" aria-labelledby="resultsTitle" hidden>
+        <div class="section-heading results-heading">
+          <h2 id="resultsTitle">浏览</h2>
+          <span id="resultsMeta" class="section-meta">文件夹优先</span>
+        </div>
+        <div class="results" id="results" aria-label="书签结果"></div>
+      </section>
+
+      <section class="empty-state" id="emptyState" aria-live="polite" hidden>
+        <span class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="6.5"></circle>
+            <path d="m16 16 4 4M8.5 11h5"></path>
+          </svg>
+        </span>
+        <h2>没有找到匹配项</h2>
+        <p>试试更短的关键词，或切换模糊搜索。</p>
+      </section>
+    </main>
+
+    <footer class="shortcut-footer" aria-label="键盘操作提示">
+      <span><kbd>↑ ↓</kbd> 选择</span>
+      <span><kbd>Enter</kbd> 打开</span>
+      <span><kbd>Esc</kbd> 返回</span>
+    </footer>
+
+    <div id="errorToast" class="error-toast" role="status" aria-live="polite" hidden></div>
   </div>
 
-  <!-- 设置面板 -->
-  <div id="settingsPanel" class="settings-panel" style="display: none;">
-    <div class="settings-content">
+  <div id="settingsPanel" class="settings-panel" aria-hidden="true" hidden>
+    <aside class="settings-content" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <div class="settings-header">
-        <h2>⚙️ 设置</h2>
-        <button id="closeSettings" class="icon-button" aria-label="关闭">✕</button>
-      </div>
-      <div class="settings-body">
-        <div class="setting-item">
-          <label for="darkModeToggle">
-            <span>🌙 深色模式</span>
-            <input type="checkbox" id="darkModeToggle" class="toggle">
-          </label>
+        <div>
+          <span class="eyebrow">偏好设置</span>
+          <h2 id="settingsTitle">个性化书签搜索</h2>
         </div>
-        <div class="setting-item">
-          <label for="showFaviconToggle">
-            <span>🎨 显示网站图标</span>
+        <button id="closeSettings" class="icon-button" type="button" aria-label="关闭设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 7 10 10M17 7 7 17"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+        <fieldset class="theme-fieldset">
+          <legend>外观</legend>
+          <div class="theme-options">
+            <label class="theme-option">
+              <input type="radio" name="themeMode" value="system">
+              <span>跟随系统</span>
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="themeMode" value="light">
+              <span>浅色</span>
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="themeMode" value="dark">
+              <span>深色</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="palette-fieldset">
+          <legend>配色主题</legend>
+          <div class="palette-options">
+            <label class="palette-option" data-palette="classic">
+              <input type="radio" name="colorTheme" value="classic">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>经典紫</span>
+              </span>
+            </label>
+            <label class="palette-option" data-palette="candy">
+              <input type="radio" name="colorTheme" value="candy">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>糖果色</span>
+              </span>
+            </label>
+            <label class="palette-option" data-palette="ocean">
+              <input type="radio" name="colorTheme" value="ocean">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>海盐蓝</span>
+              </span>
+            </label>
+            <label class="palette-option" data-palette="matcha">
+              <input type="radio" name="colorTheme" value="matcha">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>抹茶绿</span>
+              </span>
+            </label>
+            <label class="palette-option" data-palette="sunset">
+              <input type="radio" name="colorTheme" value="sunset">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>日落橙</span>
+              </span>
+            </label>
+            <label class="palette-option" data-palette="mono">
+              <input type="radio" name="colorTheme" value="mono">
+              <span class="palette-choice">
+                <span class="palette-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>黑白灰</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="settings-group">
+          <label class="setting-item" for="showFaviconToggle">
+            <span class="setting-copy">
+              <span class="setting-title">显示网站图标</span>
+              <span class="setting-description">用 favicon 快速识别不同网站</span>
+            </span>
             <input type="checkbox" id="showFaviconToggle" class="toggle" checked>
           </label>
-        </div>
-        <div class="setting-item">
-          <label for="fuzzySearchToggle">
-            <span>🔍 模糊搜索</span>
+
+          <label class="setting-item" for="fuzzySearchToggle">
+            <span class="setting-copy">
+              <span class="setting-title">模糊搜索</span>
+              <span class="setting-description">关键词不连续时也能找到结果</span>
+            </span>
             <input type="checkbox" id="fuzzySearchToggle" class="toggle">
           </label>
         </div>
-        <div class="setting-item">
-          <button id="clearHistoryButton" class="button-secondary">
-            🗑️ 清除历史记录
-          </button>
-        </div>
+
+        <button id="clearHistoryButton" class="danger-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
+          </svg>
+          清除最近使用和搜索历史
+        </button>
       </div>
+
       <div class="settings-footer">
-        <p>快捷键：<kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></p>
-        <p class="version">版本 2.1.0</p>
+        <span>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></span>
+        <span>v2.1.0</span>
       </div>
-    </div>
+    </aside>
   </div>
 
-  <!-- 引入 JavaScript 文件 -->
+  <div id="confirmDialog" class="confirm-dialog" aria-hidden="true" hidden>
+    <section class="confirm-content" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <span class="confirm-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3 2.8 19h18.4L12 3Z"></path>
+          <path d="M12 9v4M12 16.5v.5"></path>
+        </svg>
+      </span>
+      <h2 id="confirmTitle">确认操作</h2>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelButton" class="confirm-cancel-button" type="button">取消</button>
+        <button id="confirmActionButton" class="confirm-action-button" type="button">确认</button>
+      </div>
+    </section>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
