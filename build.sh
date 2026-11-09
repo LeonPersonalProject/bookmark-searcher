@@ -3,12 +3,12 @@
 # 书签搜索器发布脚本
 # 用于打包扩展并准备发布
 
-set -e
+set -euo pipefail
 
 echo "📦 开始打包书签搜索器..."
 
 # 获取版本号
-VERSION=$(grep '"version"' manifest.json | sed 's/.*"version": "\(.*\)".*/\1/')
+VERSION=$(node -p "require('./manifest.json').version")
 echo "📌 当前版本: v$VERSION"
 
 # 创建发布目录
@@ -21,21 +21,27 @@ mkdir -p "$RELEASE_DIR/$PACKAGE_NAME"
 
 # 复制必要文件
 echo "📋 复制文件..."
-cp manifest.json "$RELEASE_DIR/$PACKAGE_NAME/"
-cp popup.html "$RELEASE_DIR/$PACKAGE_NAME/"
-cp popup.css "$RELEASE_DIR/$PACKAGE_NAME/"
-cp popup.js "$RELEASE_DIR/$PACKAGE_NAME/"
-cp search.js "$RELEASE_DIR/$PACKAGE_NAME/"
-cp keyboard.js "$RELEASE_DIR/$PACKAGE_NAME/"
-cp README.md "$RELEASE_DIR/$PACKAGE_NAME/"
-cp LICENSE "$RELEASE_DIR/$PACKAGE_NAME/"
-cp CHANGELOG.md "$RELEASE_DIR/$PACKAGE_NAME/"
+required_files=(
+  manifest.json
+  popup.html
+  popup.css
+  popup.js
+  search.js
+  keyboard.js
+  README.md
+  LICENSE
+  CHANGELOG.md
+  logo.svg
+  logo-small.svg
+)
+for file in "${required_files[@]}"; do
+  test -f "$file"
+  cp "$file" "$RELEASE_DIR/$PACKAGE_NAME/"
+done
 
 # 复制图标
 echo "🎨 复制图标..."
 cp -r icons "$RELEASE_DIR/$PACKAGE_NAME/"
-cp logo.svg "$RELEASE_DIR/$PACKAGE_NAME/"
-cp logo-small.svg "$RELEASE_DIR/$PACKAGE_NAME/"
 
 # 创建 ZIP 包
 echo "🗜️  创建 ZIP 包..."

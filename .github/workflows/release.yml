@@ -5,36 +5,102 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Create release package
+      - name: Validate tag and manifest version
+        id: metadata
+        shell: bash
         run: |
-          mkdir -p release
-          cp manifest.json popup.html popup.css popup.js release/
-          cp -r icons release/
-          cp logo.svg logo-small.svg release/
-          cd release
-          zip -r ../bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip .
+          set -euo pipefail
+
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(node -p "require('./manifest.json').version")"
+
+          if [[ "$tag_version" != "$manifest_version" ]]; then
+            echo "Tag version ($tag_version) does not match manifest version ($manifest_version)." >&2
+            exit 1
+          fi
+
+          echo "version=$manifest_version" >> "$GITHUB_OUTPUT"
+
+      - name: Run static checks and tests
+        run: ./check.sh
+
+      - name: Build release package
+        run: |
+          ./build.sh
+
+      - name: Validate release package contents
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_path="release/bookmark-searcher-v${VERSION}.zip"
+          package_root="bookmark-searcher-v${VERSION}"
+          test -f "$package_path"
+
+          unpack_dir="$(mktemp -d)"
+          trap 'rm -rf "$unpack_dir"' EXIT
+          unzip -q "$package_path" -d "$unpack_dir"
+
+          extracted_dir="$unpack_dir/$package_root"
+          test -d "$extracted_dir"
+
+          required_files=(
+            manifest.json
+            popup.html
+            popup.css
+            popup.js
+            search.js
+            keyboard.js
+            README.md
+            LICENSE
+            CHANGELOG.md
+            logo.svg
+            logo-small.svg
+          )
+          for file in "${required_files[@]}"; do
+            test -f "$extracted_dir/$file"
+          done
+          test -d "$extracted_dir/icons"
+
+          packaged_version="$(node -e \
+            'const fs = require("fs");
+             const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+             process.stdout.write(manifest.version);' \
+            "$extracted_dir/manifest.json")"
+          if [[ "$packaged_version" != "$VERSION" ]]; then
+            echo "Packaged manifest version ($packaged_version) does not match $VERSION." >&2
+            exit 1
+          fi
+
+          echo "Validated $package_path ($packaged_version)"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip
+          files: release/bookmark-searcher-v${{ steps.metadata.outputs.version }}.zip
           body: |
-            ## 📦 书签搜索器 v${{ steps.get_version.outputs.VERSION }}
+            ## 📦 书签搜索器 v${{ steps.metadata.outputs.version }}
 
             ### 安装方法
-            1. 下载 `bookmark-searcher-v${{ steps.get_version.outputs.VERSION }}.zip`
+            1. 下载 `bookmark-searcher-v${{ steps.metadata.outputs.version }}.zip`
             2. 解压文件
             3. 打开浏览器扩展管理页面
             4. 开启"开发者模式"

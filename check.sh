@@ -6,6 +6,7 @@ node --check search.js
 node --check keyboard.js
 node --check popup.js
 python3 -m json.tool manifest.json >/dev/null
+bash -n build.sh
 node --test tests/*.test.js
 git diff --check
 

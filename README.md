@@ -179,6 +179,7 @@
 
 ```
 bookmark-searcher/
+├── .github/workflows/       # CI 与发布工作流
 ├── manifest.json          # 扩展配置文件（Manifest V3）
 ├── popup.html             # 弹出窗口的 HTML 结构
 ├── popup.css              # 弹出窗口的样式文件
@@ -261,6 +262,8 @@ bash check.sh
 ```
 
 该命令会检查 JavaScript、Manifest、HTML/CSS 结构并运行搜索核心单元测试。需要生成发布包时运行 `bash build.sh`。
+
+GitHub Actions 会在提交和 Pull Request 中重复执行检查，并验证发布压缩包包含完整脚本；打 `v*` 标签时还会校验标签版本与 Manifest 版本一致。
 
 ## 🚀 后续方向
 
