@@ -7,6 +7,7 @@ let itemsById = new Map();
 let selectedIndex = -1;
 let currentFolderId = null;
 let searchTimeout = null;
+let isSearchComposing = false;
 let bookmarkRefreshTimeout = null;
 let toastTimeout = null;
 let settingsPanelAnimation = null;
@@ -108,6 +109,7 @@ const primaryShortcutLabels = document.querySelectorAll('[data-primary-shortcut]
 const shortcutHelpButton = document.getElementById('shortcutHelpButton');
 const shortcutHelp = document.getElementById('shortcutHelp');
 const closeShortcutHelp = document.getElementById('closeShortcutHelp');
+const enterActionLabel = document.getElementById('enterActionLabel');
 
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -142,11 +144,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function bindEventListeners() {
   searchInput.addEventListener('input', handleSearchWithDebounce);
+  searchInput.addEventListener('compositionstart', () => {
+    isSearchComposing = true;
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  });
+  searchInput.addEventListener('compositionend', () => {
+    isSearchComposing = false;
+    handleSearchWithDebounce();
+  });
   searchInput.addEventListener('focus', showSearchHistory);
   searchInput.addEventListener('click', showSearchHistory);
   searchInput.addEventListener('blur', () => {
     setTimeout(() => {
-      if (!searchHistoryEl.contains(document.activeElement)) {
+      if (document.activeElement !== searchInput && !searchHistoryEl.contains(document.activeElement)) {
         hideSearchHistory();
       }
     }, 140);
@@ -406,9 +417,18 @@ function pruneHistoryAgainstBookmarks() {
 // ==================== 搜索与排序 ====================
 function handleSearchWithDebounce() {
   clearTimeout(searchTimeout);
+  searchTimeout = null;
   toggleClearButton();
   hideSearchHistory();
-  searchTimeout = setTimeout(updateView, 140);
+  if (!isSearchComposing) {
+    searchTimeout = setTimeout(updateView, 140);
+  }
+}
+
+function flushPendingSearch() {
+  if (searchTimeout !== null) {
+    updateView();
+  }
 }
 
 function toggleClearButton() {
@@ -427,6 +447,8 @@ function clearSearch() {
 }
 
 function updateView() {
+  clearTimeout(searchTimeout);
+  searchTimeout = null;
   // A view refresh can detach the element that opened the action menu. Close
   // it before replacing result rows so stale actions cannot remain actionable.
   closeBookmarkActions(false);
@@ -446,8 +468,6 @@ function updateView() {
   }
 
   renderAllResults = false;
-  selectedIndex = -1;
-  searchInput.removeAttribute('aria-activedescendant');
   displayItems(itemsToDisplay, query, renderAllResults);
   updateStats(itemsToDisplay.length, query);
   updateNavigation();
@@ -468,8 +488,7 @@ function displayItems(items, query = parseSearchQuery(''), renderAll = false) {
   // This also covers the "show more" refresh path, which can otherwise leave
   // a menu anchored to a row that is about to be removed.
   closeBookmarkActions(false);
-  selectedIndex = -1;
-  searchInput.removeAttribute('aria-activedescendant');
+  const previousSelectionId = renderAll ? getSelectedResultContext()?.item.id : null;
   resultsContainer.innerHTML = '';
   resultsMore.innerHTML = '';
   resultsMore.hidden = true;
@@ -517,10 +536,17 @@ function displayItems(items, query = parseSearchQuery(''), renderAll = false) {
       renderAllResults = true;
       displayItems(items, query, true);
       updateStats(items.length, query);
+      if (!query.isEmpty) searchInput.focus();
     });
     resultsMore.appendChild(moreButton);
     resultsMore.hidden = false;
   }
+
+  const previousIndex = previousSelectionId === null || previousSelectionId === undefined
+    ? -1
+    : visibleItems.findIndex(item => item.id === previousSelectionId);
+  const initialIndex = !query.isEmpty && !isSearchComposing && visibleItems.length > 0 ? 0 : -1;
+  setSelectedIndex(previousIndex >= 0 ? previousIndex : initialIndex);
 }
 
 function createItemElement(item, query, index) {
@@ -548,6 +574,7 @@ function createItemElement(item, query, index) {
         <span>${item.childCount}</span>
         ${iconSvg('chevron-right')}
       </span>
+      <span class="item-enter-hint" aria-hidden="true">↵ 进入</span>
     `;
 
   } else {
@@ -566,6 +593,7 @@ function createItemElement(item, query, index) {
         <span class="bookmark-title">${highlightedTitle}</span>
         <span class="bookmark-meta">${highlightText(displayUrl, query.terms)} · ${escapeHtml(item.path)}</span>
       </span>
+      <span class="item-enter-hint" aria-hidden="true">↵ 打开</span>
     `;
 
     const row = document.createElement('div');
@@ -753,7 +781,13 @@ function iconSvg(name) {
 }
 
 // ==================== 键盘导航 ====================
+function isComposingKey(event) {
+  // Some IMEs finish composition before dispatching their confirming keydown.
+  return isSearchComposing || event.isComposing || event.keyCode === 229;
+}
+
 function handleKeyNavigation(event) {
+  if (isComposingKey(event)) return;
   if (handleEnhancedKeyboardShortcut(event)) return;
 
   const hasNavigationModifier = event.altKey || event.ctrlKey || event.metaKey;
@@ -827,7 +861,7 @@ function handleKeyNavigation(event) {
 }
 
 function handleGlobalKeyboardShortcuts(event) {
-  if (event.defaultPrevented || isKeyboardLayerOpen()) return;
+  if (event.defaultPrevented || isKeyboardLayerOpen() || isComposingKey(event)) return;
   if (handleEnhancedKeyboardShortcut(event)) return;
 
   if (event.key === 'Escape') {
@@ -868,6 +902,11 @@ function isKeyboardLayerOpen() {
 }
 
 function handleEnhancedKeyboardShortcut(event) {
+  if (isComposingKey(event)) return false;
+  if (['Enter', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End',
+    'PageDown', 'PageUp', 'F2', 'F10', 'ContextMenu'].includes(event.key)) {
+    flushPendingSearch();
+  }
   const selection = getSelectedResultContext();
   const intent = getShortcutIntent(event, {
     hasSelection: Boolean(selection),
@@ -1057,6 +1096,9 @@ function setSelectedIndex(index) {
     selectedIndex = -1;
     searchInput.removeAttribute('aria-activedescendant');
   }
+
+  const target = bookmarkItems[selectedIndex >= 0 ? selectedIndex : 0];
+  enterActionLabel.textContent = target?.dataset.itemType === 'folder' ? '进入' : '打开';
 }
 
 function scrollToSelected({ behavior = 'smooth' } = {}) {

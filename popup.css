@@ -910,6 +910,30 @@ svg {
   height: 15px;
 }
 
+.item-enter-hint {
+  display: none;
+  grid-column: 3;
+  grid-row: 1;
+  align-items: center;
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.bookmark-item.selected .item-enter-hint {
+  display: inline-flex;
+}
+
+.bookmark-item.selected .item-trailing {
+  display: none;
+}
+
 .bookmark-action-trigger {
   position: absolute;
   top: 50%;
@@ -1902,12 +1926,18 @@ body[data-color-theme="candy"] .search-box {
   .bookmark-item.selected .bookmark-title,
   .bookmark-item.selected .bookmark-meta,
   .bookmark-item.selected .item-trailing,
+  .bookmark-item.selected .item-enter-hint,
   .bookmark-item.selected .item-icon {
     color: HighlightText;
   }
 
-  .bookmark-item.selected .item-icon {
+  .bookmark-item.selected .item-icon,
+  .bookmark-item.selected .item-enter-hint {
     background: Highlight;
+  }
+
+  .bookmark-item.selected .item-enter-hint {
+    border-color: HighlightText;
   }
 
   .bookmark-item.selected::before {
