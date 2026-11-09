@@ -64,9 +64,7 @@
     };
   }
 
-  function fuzzyMatch(text, pattern) {
-    const normalizedText = normalizeSearchText(text);
-    const normalizedPattern = normalizeSearchText(pattern);
+  function fuzzyMatchNormalized(normalizedText, normalizedPattern) {
     if (!normalizedText || !normalizedPattern) return 0;
 
     let score = 0;
@@ -89,6 +87,13 @@
     return score;
   }
 
+  function fuzzyMatch(text, pattern) {
+    return fuzzyMatchNormalized(
+      normalizeSearchText(text),
+      normalizeSearchText(pattern)
+    );
+  }
+
   function scoreTerm(item, term, fuzzySearch) {
     const { searchTitle, searchUrl, searchPath, searchDomain } = item;
 
@@ -102,10 +107,10 @@
 
     if (!fuzzySearch) return -1;
 
-    const titleFuzzyScore = fuzzyMatch(searchTitle, term);
+    const titleFuzzyScore = fuzzyMatchNormalized(searchTitle, term);
     if (titleFuzzyScore > 0) return 60 + Math.min(titleFuzzyScore, 70);
 
-    const urlFuzzyScore = fuzzyMatch(searchUrl, term);
+    const urlFuzzyScore = fuzzyMatchNormalized(searchUrl, term);
     if (urlFuzzyScore > 0) return 30 + Math.min(urlFuzzyScore, 45);
 
     return -1;

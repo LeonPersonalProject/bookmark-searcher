@@ -34,7 +34,11 @@
           placeholder="搜索多个关键词，或输入 domain:"
           autocomplete="off"
           autofocus
+          role="combobox"
           aria-label="搜索书签"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-expanded="false"
           aria-controls="results searchHistory"
         >
         <kbd id="searchShortcut" class="search-shortcut">Ctrl ⇧ K</kbd>
@@ -43,7 +47,14 @@
             <path d="m8 8 8 8M16 8l-8 8"></path>
           </svg>
         </button>
-        <div id="searchHistory" class="search-history" aria-label="搜索历史" hidden></div>
+        <div
+          id="searchHistory"
+          class="search-history"
+          role="listbox"
+          aria-label="搜索历史"
+          aria-orientation="vertical"
+          hidden
+        ></div>
       </div>
     </section>
 
@@ -73,7 +84,14 @@
           <h2 id="resultsTitle">浏览</h2>
           <span id="resultsMeta" class="section-meta">文件夹优先</span>
         </div>
-        <div class="results" id="results" aria-label="书签结果"></div>
+        <div
+          class="results"
+          id="results"
+          role="listbox"
+          aria-label="书签结果"
+          aria-orientation="vertical"
+        ></div>
+        <div id="resultsMore" class="results-more" hidden></div>
       </section>
 
       <section class="empty-state" id="emptyState" aria-live="polite" hidden>
@@ -254,7 +272,7 @@
           <label class="setting-item" for="showFaviconToggle">
             <span class="setting-copy">
               <span class="setting-title">显示网站图标</span>
-              <span class="setting-description">用 favicon 快速识别不同网站</span>
+              <span class="setting-description">按需向 Google Favicon 请求并缓存域名图标</span>
             </span>
             <input type="checkbox" id="showFaviconToggle" class="toggle" checked>
           </label>

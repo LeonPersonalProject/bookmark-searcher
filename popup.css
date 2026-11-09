@@ -26,8 +26,9 @@ body {
   --surface-subtle: #f7f8fb;
   --surface-hover: #f3f4f8;
   --text-primary: #171a21;
-  --text-secondary: #72798a;
-  --text-tertiary: #969cac;
+  /* Keep supporting text readable on page, surface and subtle surfaces. */
+  --text-secondary: #6b7181;
+  --text-tertiary: #888ea1;
   --border: #e7e9ef;
   --border-strong: #d7dbe5;
   --accent: #5956e9;
@@ -86,7 +87,7 @@ body[data-color-theme="candy"] {
   --surface-hover: #ffe7f3;
   --text-primary: #402942;
   --text-secondary: #80667f;
-  --text-tertiary: #aa8fa7;
+  --text-tertiary: #a2849f;
   --border: #f3d8e9;
   --border-strong: #e7bad5;
   --accent: #eb5aa7;
@@ -135,8 +136,8 @@ body[data-color-theme="ocean"] {
   --surface-subtle: #eff9fb;
   --surface-hover: #e2f3f6;
   --text-primary: #18363d;
-  --text-secondary: #587b84;
-  --text-tertiary: #82a0a7;
+  --text-secondary: #557780;
+  --text-tertiary: #73959d;
   --border: #d5e9ed;
   --border-strong: #b9dce2;
   --accent: #168da3;
@@ -177,8 +178,8 @@ body[data-color-theme="matcha"] {
   --surface-subtle: #f0f5e8;
   --surface-hover: #e7efdc;
   --text-primary: #27331f;
-  --text-secondary: #68775d;
-  --text-tertiary: #8e9b83;
+  --text-secondary: #65745b;
+  --text-tertiary: #839177;
   --border: #dde7d2;
   --border-strong: #c9d8ba;
   --accent: #668f45;
@@ -220,7 +221,7 @@ body[data-color-theme="sunset"] {
   --surface-hover: #ffe6da;
   --text-primary: #442a24;
   --text-secondary: #86675f;
-  --text-tertiary: #aa8d84;
+  --text-tertiary: #a4857c;
   --border: #f1d8cd;
   --border-strong: #e6bdaa;
   --accent: #e66d4b;
@@ -262,7 +263,7 @@ body[data-color-theme="mono"] {
   --surface-hover: #e9e9e6;
   --text-primary: #1e211f;
   --text-secondary: #656965;
-  --text-tertiary: #8b908b;
+  --text-tertiary: #878c87;
   --border: #dedfdd;
   --border-strong: #c9cbc8;
   --accent: #3d4540;
@@ -791,9 +792,36 @@ svg {
   border-top: 1px solid var(--border);
 }
 
+.results-more {
+  padding: 10px 14px 14px;
+  text-align: center;
+}
+
+.results-more-button {
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.results-more-button:hover,
+.results-more-button:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .bookmark-row {
   position: relative;
   border-bottom: 1px solid var(--border);
+  content-visibility: auto;
+  contain-intrinsic-size: 59px;
 }
 
 .bookmark-item {
@@ -1251,7 +1279,6 @@ svg {
   background: var(--surface);
   box-shadow: -16px 0 42px rgba(14, 18, 28, 0.18);
   transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
-  will-change: transform, opacity;
 }
 
 .settings-panel.is-closing {
@@ -1819,5 +1846,77 @@ body[data-color-theme="candy"] .search-box {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  button:focus-visible,
+  input:focus-visible,
+  label:has(input:focus-visible) {
+    outline-width: 3px;
+    outline-offset: 3px;
+  }
+
+  .search-box,
+  .recent-bookmark-item,
+  .results-more-button,
+  .theme-options,
+  .palette-choice,
+  .settings-group,
+  .bookmark-editor-fields input {
+    border-color: var(--border-strong);
+  }
+
+  .bookmark-row,
+  .bookmark-item {
+    border-color: var(--border-strong);
+  }
+
+  .bookmark-item.selected {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .bookmark-item.selected::before {
+    width: 4px;
+  }
+
+  .bookmark-action-trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  button:focus-visible,
+  input:focus-visible,
+  label:has(input:focus-visible) {
+    outline: 2px solid CanvasText;
+  }
+
+  .bookmark-item.selected {
+    color: HighlightText;
+    background: Highlight;
+    box-shadow: inset 0 0 0 1px HighlightText;
+  }
+
+  .bookmark-item.selected .bookmark-title,
+  .bookmark-item.selected .bookmark-meta,
+  .bookmark-item.selected .item-trailing,
+  .bookmark-item.selected .item-icon {
+    color: HighlightText;
+  }
+
+  .bookmark-item.selected .item-icon {
+    background: Highlight;
+  }
+
+  .bookmark-item.selected::before {
+    background: HighlightText;
+  }
+
+  .bookmark-action-trigger:hover,
+  .bookmark-action-trigger:focus-visible {
+    color: ButtonText;
+    background: ButtonFace;
   }
 }

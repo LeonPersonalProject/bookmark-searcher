@@ -36,7 +36,11 @@
       return 'parent-folder';
     }
     const plainRight = key === 'ArrowRight' && !altKey && !primaryKey && !shiftKey && searchEmpty;
-    if (plainRight || (altKey && key === 'ArrowRight')) return 'enter-folder';
+    if ((plainRight || (altKey && key === 'ArrowRight'))
+      && hasSelection
+      && selectedType === 'folder') {
+      return 'enter-folder';
+    }
 
     if (primaryKey && key === 'ArrowDown') return 'next-folder';
     if (primaryKey && key === 'ArrowUp') return 'previous-folder';

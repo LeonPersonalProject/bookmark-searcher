@@ -28,7 +28,10 @@ test('支持返回上级和进入文件夹快捷键', () => {
     'parent-folder'
   );
   assert.equal(
-    getShortcutIntent(keyboardEvent('ArrowRight', { altKey: true })),
+    getShortcutIntent(keyboardEvent('ArrowRight', { altKey: true }), {
+      hasSelection: true,
+      selectedType: 'folder'
+    }),
     'enter-folder'
   );
   assert.equal(
@@ -37,6 +40,14 @@ test('支持返回上级和进入文件夹快捷键', () => {
   );
   assert.equal(
     getShortcutIntent(keyboardEvent('ArrowRight'), { searchEmpty: true }),
+    null
+  );
+  assert.equal(
+    getShortcutIntent(keyboardEvent('ArrowRight'), {
+      searchEmpty: true,
+      hasSelection: true,
+      selectedType: 'folder'
+    }),
     'enter-folder'
   );
 });

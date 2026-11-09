@@ -1,9 +1,13 @@
 // ==================== 全局状态 ====================
 let allBookmarks = [];
 let allItems = [];
+let itemsByParentId = new Map();
+let foldersById = new Map();
+let itemsById = new Map();
 let selectedIndex = -1;
 let currentFolderId = null;
 let searchTimeout = null;
+let bookmarkRefreshTimeout = null;
 let toastTimeout = null;
 let settingsPanelAnimation = null;
 let settingsDrawerAnimation = null;
@@ -20,6 +24,26 @@ let actionMenuLastFocusedElement = null;
 let editingBookmarkId = null;
 let bookmarkEditorReturnFocus = null;
 let shortcutHelpLastFocusedElement = null;
+let historySaveQueue = Promise.resolve();
+let settingsSaveQueue = Promise.resolve();
+const faviconUrlCache = new Map();
+const failedFaviconDomains = new Set();
+const displayUrlCache = new Map();
+const MAX_RENDERED_RESULTS = 300;
+const MAX_FAVICON_CACHE = 512;
+const MAX_DISPLAY_URL_CACHE = 2048;
+let renderAllResults = false;
+let highlightRegexCacheKey = '';
+let highlightRegexCache = null;
+const allowedBookmarkProtocols = new Set([
+  'http:',
+  'https:',
+  'ftp:',
+  'file:',
+  'mailto:',
+  'chrome:',
+  'chrome-extension:'
+]);
 let settings = {
   themeMode: 'system',
   colorTheme: 'classic',
@@ -52,6 +76,7 @@ const resultsSection = document.getElementById('resultsSection');
 const resultsTitle = document.getElementById('resultsTitle');
 const resultsMeta = document.getElementById('resultsMeta');
 const resultsContainer = document.getElementById('results');
+const resultsMore = document.getElementById('resultsMore');
 const emptyState = document.getElementById('emptyState');
 const errorToast = document.getElementById('errorToast');
 const settingsButton = document.getElementById('settingsButton');
@@ -97,6 +122,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     fuzzySearchToggle.checked = settings.fuzzySearch;
     applyTheme();
     await loadBookmarks();
+    if (pruneHistoryAgainstBookmarks()) {
+      await saveHistory();
+    }
     displayRecentBookmarks();
     showLoading(false);
     updateView();
@@ -132,6 +160,11 @@ function bindEventListeners() {
     }, 0);
   });
   clearSearchButton.addEventListener('click', clearSearch);
+  resultsContainer.addEventListener('click', handleResultsClick);
+  resultsContainer.addEventListener('contextmenu', handleResultsContextMenu);
+  resultsContainer.addEventListener('focusin', handleResultsFocus);
+  resultsContainer.addEventListener('error', handleFaviconError, true);
+  recentBookmarksEl.addEventListener('error', handleFaviconError, true);
 
   settingsButton.addEventListener('click', openSettings);
   closeSettings.addEventListener('click', closeSettingsPanel);
@@ -193,6 +226,7 @@ function bindEventListeners() {
       applyTheme();
     }
   });
+  bindBookmarkChangeListeners();
 }
 
 function updateShortcutLabel() {
@@ -224,7 +258,12 @@ async function loadBookmarks() {
       }
 
       try {
-        allItems = flattenBookmarks(bookmarkTreeNodes);
+        allItems = [];
+        itemsByParentId = new Map();
+        foldersById = new Map();
+        itemsById = new Map();
+        flattenBookmarks(bookmarkTreeNodes, '', null, allItems);
+        allItems.forEach(item => itemsById.set(String(item.id), item));
         allBookmarks = allItems.filter(item => item.type === 'bookmark');
         resolve();
       } catch (error) {
@@ -234,13 +273,12 @@ async function loadBookmarks() {
   });
 }
 
-function flattenBookmarks(nodes, path = '', parentId = null) {
-  let items = [];
-
+function flattenBookmarks(nodes, path = '', parentId = null, items = []) {
+  let bookmarkCount = 0;
   nodes.forEach(node => {
     if (!node.title) {
       if (node.children) {
-        items = items.concat(flattenBookmarks(node.children, path, parentId));
+        bookmarkCount += flattenBookmarks(node.children, path, parentId, items);
       }
       return;
     }
@@ -248,37 +286,121 @@ function flattenBookmarks(nodes, path = '', parentId = null) {
     const currentPath = path ? `${path} > ${node.title}` : node.title;
 
     if (node.url) {
-      items.push(prepareSearchItem({
+      const item = prepareSearchItem({
         id: node.id,
         type: 'bookmark',
         title: node.title,
         url: node.url,
         path: path || '根目录',
         parentId
-      }));
+      });
+      item.displayUrl = getDisplayUrl(item.url);
+      items.push(item);
+      addItemToParentIndex(item);
+      bookmarkCount += 1;
     } else if (node.children) {
-      items.push(prepareSearchItem({
+      const folder = prepareSearchItem({
         id: node.id,
         type: 'folder',
         title: node.title,
         path: path || '根目录',
         parentId,
-        childCount: countChildren(node.children)
-      }));
-
-      items = items.concat(flattenBookmarks(node.children, currentPath, node.id));
+        childCount: 0
+      });
+      items.push(folder);
+      foldersById.set(String(folder.id), folder);
+      addItemToParentIndex(folder);
+      folder.childCount = flattenBookmarks(node.children, currentPath, node.id, items);
+      bookmarkCount += folder.childCount;
     }
   });
 
-  return items;
+  return bookmarkCount;
 }
 
-function countChildren(children) {
-  return children.reduce((count, child) => {
-    if (child.url) return count + 1;
-    if (child.children) return count + countChildren(child.children);
-    return count;
-  }, 0);
+function addItemToParentIndex(item) {
+  const key = item.parentId === null ? '__root__' : String(item.parentId);
+  const siblings = itemsByParentId.get(key) || [];
+  siblings.push(item);
+  itemsByParentId.set(key, siblings);
+}
+
+function getItemsForParent(parentId) {
+  return itemsByParentId.get(parentId === null ? '__root__' : String(parentId)) || [];
+}
+
+function bindBookmarkChangeListeners() {
+  const bookmarkEvents = ['onCreated', 'onChanged', 'onMoved', 'onRemoved', 'onImportEnded'];
+  bookmarkEvents.forEach(eventName => {
+    const event = chrome.bookmarks?.[eventName];
+    if (event?.addListener) {
+      event.addListener(scheduleBookmarkRefresh);
+    }
+  });
+}
+
+function scheduleBookmarkRefresh() {
+  clearTimeout(bookmarkRefreshTimeout);
+  bookmarkRefreshTimeout = setTimeout(refreshBookmarks, 80);
+}
+
+async function refreshBookmarks() {
+  const previousFolderId = currentFolderId;
+  try {
+    await loadBookmarks();
+    if (previousFolderId !== null && !foldersById.has(String(previousFolderId))) {
+      currentFolderId = null;
+    }
+    const historyChanged = pruneHistoryAgainstBookmarks();
+    if (historyChanged) {
+      await saveHistory();
+    }
+    closeBookmarkActions(false);
+    displayRecentBookmarks();
+    updateView();
+  } catch (error) {
+    console.error('刷新书签失败:', error);
+    showError('书签列表刷新失败，请重新打开弹窗');
+  }
+}
+
+function pruneHistoryAgainstBookmarks() {
+  const bookmarkMap = new Map(allBookmarks.map(item => [String(item.id), item]));
+  let changed = false;
+  const nextRecentBookmarks = recentBookmarks
+    .map(recent => {
+      const current = bookmarkMap.get(String(recent.id));
+      if (!current) {
+        changed = true;
+        return null;
+      }
+      if (recent.title !== current.title
+        || recent.url !== current.url
+        || recent.path !== current.path
+        || String(recent.parentId) !== String(current.parentId)) {
+        changed = true;
+      }
+      return {
+        id: current.id,
+        type: 'bookmark',
+        title: current.title,
+        url: current.url,
+        path: current.path,
+        parentId: current.parentId
+      };
+    })
+    .filter(Boolean);
+
+  const nextUsageStats = Object.fromEntries(
+    Object.entries(usageStats).filter(([id]) => bookmarkMap.has(String(id)))
+  );
+  if (Object.keys(nextUsageStats).length !== Object.keys(usageStats).length) {
+    changed = true;
+  }
+
+  recentBookmarks = nextRecentBookmarks.slice(0, 4);
+  usageStats = nextUsageStats;
+  return changed;
 }
 
 // ==================== 搜索与排序 ====================
@@ -305,10 +427,13 @@ function clearSearch() {
 }
 
 function updateView() {
+  // A view refresh can detach the element that opened the action menu. Close
+  // it before replacing result rows so stale actions cannot remain actionable.
+  closeBookmarkActions(false);
   const query = parseSearchQuery(searchInput.value);
   const sourceItems = currentFolderId === null
-    ? (query.isEmpty ? allItems.filter(item => item.parentId === null) : allItems)
-    : allItems.filter(item => item.parentId === currentFolderId);
+    ? (query.isEmpty ? getItemsForParent(null) : allItems)
+    : getItemsForParent(currentFolderId);
   let itemsToDisplay = query.isEmpty
     ? [...sourceItems]
     : searchAndRank(sourceItems, query, {
@@ -320,11 +445,13 @@ function updateView() {
     itemsToDisplay.sort(compareItems);
   }
 
+  renderAllResults = false;
   selectedIndex = -1;
   searchInput.removeAttribute('aria-activedescendant');
-  displayItems(itemsToDisplay, query);
+  displayItems(itemsToDisplay, query, renderAllResults);
   updateStats(itemsToDisplay.length, query);
   updateNavigation();
+  syncSearchExpandedState();
   contentArea.scrollTop = 0;
 }
 
@@ -337,8 +464,16 @@ function compareItems(first, second) {
 }
 
 // ==================== 结果渲染 ====================
-function displayItems(items, query = parseSearchQuery('')) {
+function displayItems(items, query = parseSearchQuery(''), renderAll = false) {
+  // This also covers the "show more" refresh path, which can otherwise leave
+  // a menu anchored to a row that is about to be removed.
+  closeBookmarkActions(false);
+  selectedIndex = -1;
+  searchInput.removeAttribute('aria-activedescendant');
   resultsContainer.innerHTML = '';
+  resultsMore.innerHTML = '';
+  resultsMore.hidden = true;
+  const visibleItems = renderAll ? items : items.slice(0, MAX_RENDERED_RESULTS);
 
   const showRecent = query.isEmpty && currentFolderId === null && recentBookmarks.length > 0;
   recentSection.hidden = !showRecent;
@@ -354,30 +489,50 @@ function displayItems(items, query = parseSearchQuery('')) {
     } else {
       resultsMeta.textContent = settings.fuzzySearch ? '模糊匹配' : '标题、网址与路径';
     }
+    if (items.length > visibleItems.length) {
+      resultsMeta.textContent += ` · 显示 ${visibleItems.length}/${items.length}`;
+    }
   } else if (currentFolderId === null) {
     resultsTitle.textContent = '浏览';
     resultsMeta.textContent = '文件夹优先';
   } else {
     resultsTitle.textContent = '当前文件夹';
-    resultsMeta.textContent = `${items.length} 项`;
+    resultsMeta.textContent = items.length > visibleItems.length
+      ? `显示 ${visibleItems.length}/${items.length} 项`
+      : `${items.length} 项`;
   }
 
-  items.forEach((item, index) => {
-    resultsContainer.appendChild(createItemElement(item, query, index));
+  const fragment = document.createDocumentFragment();
+  visibleItems.forEach((item, index) => {
+    fragment.appendChild(createItemElement(item, query, index));
   });
+  resultsContainer.appendChild(fragment);
+
+  if (items.length > visibleItems.length) {
+    const moreButton = document.createElement('button');
+    moreButton.type = 'button';
+    moreButton.className = 'results-more-button';
+    moreButton.textContent = `显示其余 ${items.length - visibleItems.length} 项`;
+    moreButton.addEventListener('click', () => {
+      renderAllResults = true;
+      displayItems(items, query, true);
+      updateStats(items.length, query);
+    });
+    resultsMore.appendChild(moreButton);
+    resultsMore.hidden = false;
+  }
 }
 
 function createItemElement(item, query, index) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = item.type === 'folder' ? 'bookmark-item folder-item' : 'bookmark-item';
+  button.setAttribute('role', 'option');
+  button.setAttribute('aria-selected', 'false');
   button.dataset.index = index;
   button.dataset.itemId = item.id;
   button.dataset.itemType = item.type;
   button.id = `result-item-${index}`;
-  button.addEventListener('focus', () => {
-    setSelectedIndex(index);
-  });
 
   const highlightedTitle = highlightText(item.title, query.terms);
 
@@ -395,19 +550,16 @@ function createItemElement(item, query, index) {
       </span>
     `;
 
-    button.addEventListener('click', () => {
-      recordSearchKeyword();
-      enterFolder(item.id);
-    });
   } else {
-    const displayUrl = getDisplayUrl(item.url);
-    const faviconUrl = settings.showFavicon ? getFaviconUrl(item.url) : '';
+    const displayUrl = item.displayUrl || getDisplayUrl(item.url);
+    const faviconDomain = getFaviconDomain(item.url);
+    const faviconUrl = settings.showFavicon ? getFaviconUrl(item.url, faviconDomain) : '';
     const iconContent = faviconUrl
-      ? `<img src="${escapeHtml(faviconUrl)}" class="bookmark-favicon" alt="">`
+      ? `<img src="${escapeHtml(faviconUrl)}" class="bookmark-favicon" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-favicon-domain="${escapeHtml(faviconDomain)}" alt="">`
       : iconSvg('globe');
 
     button.title = item.url;
-    button.setAttribute('aria-label', `打开书签 ${item.title}`);
+    button.setAttribute('aria-label', `打开书签 ${item.title}，${displayUrl}`);
     button.innerHTML = `
       <span class="item-icon">${iconContent}</span>
       <span class="item-copy">
@@ -416,37 +568,21 @@ function createItemElement(item, query, index) {
       </span>
     `;
 
-    const favicon = button.querySelector('.bookmark-favicon');
-    if (favicon) {
-      favicon.addEventListener('error', () => {
-        favicon.parentElement.innerHTML = iconSvg('globe');
-      }, { once: true });
-    }
-
-    button.addEventListener('click', () => {
-      recordSearchKeyword({ persist: false });
-      openBookmark(item.url, item);
-    });
-
-    button.addEventListener('contextmenu', event => {
-      event.preventDefault();
-      showContextMenu(event, item);
-    });
-
     const row = document.createElement('div');
     row.className = 'bookmark-row';
+    row.setAttribute('role', 'presentation');
     row.appendChild(button);
 
     const actionTrigger = document.createElement('button');
     actionTrigger.type = 'button';
     actionTrigger.className = 'bookmark-action-trigger';
+    actionTrigger.tabIndex = -1;
     actionTrigger.title = '更多操作';
     actionTrigger.setAttribute('aria-label', `${item.title} 的更多操作`);
+    actionTrigger.setAttribute('aria-haspopup', 'menu');
+    actionTrigger.setAttribute('aria-expanded', 'false');
+    actionTrigger.setAttribute('aria-controls', 'bookmarkActions');
     actionTrigger.innerHTML = iconSvg('more');
-    actionTrigger.addEventListener('click', event => {
-      event.stopPropagation();
-      openBookmarkActions(item, { anchor: actionTrigger });
-    });
     row.appendChild(actionTrigger);
 
     return row;
@@ -455,20 +591,113 @@ function createItemElement(item, query, index) {
   return button;
 }
 
-function getFaviconUrl(url) {
+function handleResultsFocus(event) {
+  const itemElement = event.target instanceof Element
+    ? event.target.closest('.bookmark-item')
+    : null;
+  if (!itemElement || !resultsContainer.contains(itemElement)) return;
+  setSelectedIndex(Number(itemElement.dataset.index));
+}
+
+function handleResultsClick(event) {
+  const actionTrigger = event.target instanceof Element
+    ? event.target.closest('.bookmark-action-trigger')
+    : null;
+  if (actionTrigger && resultsContainer.contains(actionTrigger)) {
+    event.stopPropagation();
+    const row = actionTrigger.closest('.bookmark-row');
+    const itemElement = row?.querySelector('.bookmark-item');
+    const item = itemElement ? itemsById.get(String(itemElement.dataset.itemId)) : null;
+    if (item) openBookmarkActions(item, { anchor: actionTrigger });
+    return;
+  }
+
+  const itemElement = event.target instanceof Element
+    ? event.target.closest('.bookmark-item')
+    : null;
+  if (!itemElement || !resultsContainer.contains(itemElement)) return;
+  const item = itemsById.get(String(itemElement.dataset.itemId));
+  if (!item) return;
+
+  if (item.type === 'folder') {
+    recordSearchKeyword();
+    enterFolder(item.id);
+  } else {
+    recordSearchKeyword({ persist: false });
+    openBookmark(item.url, item);
+  }
+}
+
+function handleResultsContextMenu(event) {
+  const itemElement = event.target instanceof Element
+    ? event.target.closest('.bookmark-item')
+    : null;
+  if (!itemElement || !resultsContainer.contains(itemElement)) return;
+  const item = itemsById.get(String(itemElement.dataset.itemId));
+  if (!item || item.type !== 'bookmark') return;
+  event.preventDefault();
+  showContextMenu(event, item);
+}
+
+function handleFaviconError(event) {
+  const favicon = event.target;
+  if (!(favicon instanceof HTMLImageElement) || !favicon.classList.contains('bookmark-favicon')) return;
+  if (favicon.dataset.faviconDomain) {
+    failedFaviconDomains.add(favicon.dataset.faviconDomain);
+  }
+  if (favicon.dataset.fallback) {
+    favicon.parentElement.textContent = favicon.dataset.fallback;
+  } else {
+    favicon.parentElement.innerHTML = iconSvg('globe');
+  }
+}
+
+function getFaviconUrl(url, knownDomain = '') {
   try {
-    const domain = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+    const domain = knownDomain || getFaviconDomain(url);
+    if (!domain) return '';
+    if (failedFaviconDomains.has(domain)) return '';
+    if (faviconUrlCache.has(domain)) {
+      const cachedUrl = faviconUrlCache.get(domain);
+      faviconUrlCache.delete(domain);
+      faviconUrlCache.set(domain, cachedUrl);
+      return cachedUrl;
+    }
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+    if (faviconUrlCache.size >= MAX_FAVICON_CACHE) {
+      faviconUrlCache.delete(faviconUrlCache.keys().next().value);
+    }
+    faviconUrlCache.set(domain, faviconUrl);
+    return faviconUrl;
+  } catch {
+    return '';
+  }
+}
+
+function getFaviconDomain(url) {
+  try {
+    return new URL(url).hostname;
   } catch {
     return '';
   }
 }
 
 function getDisplayUrl(url) {
+  if (displayUrlCache.has(url)) {
+    const cachedDisplayUrl = displayUrlCache.get(url);
+    displayUrlCache.delete(url);
+    displayUrlCache.set(url, cachedDisplayUrl);
+    return cachedDisplayUrl;
+  }
   try {
     const parsedUrl = new URL(url);
     const path = parsedUrl.pathname === '/' ? '' : parsedUrl.pathname;
-    return `${parsedUrl.hostname}${path}`;
+    const displayUrl = `${parsedUrl.hostname}${path}`;
+    if (displayUrlCache.size >= MAX_DISPLAY_URL_CACHE) {
+      displayUrlCache.delete(displayUrlCache.keys().next().value);
+    }
+    displayUrlCache.set(url, displayUrl);
+    return displayUrl;
   } catch {
     return url;
   }
@@ -488,8 +717,12 @@ function highlightText(text, keywords) {
   )].sort((first, second) => second.length - first.length);
   if (normalizedKeywords.length === 0) return escapeHtml(value);
 
-  const regex = new RegExp(`(${normalizedKeywords.map(escapeRegExp).join('|')})`, 'gi');
-  return value.split(regex).map((part, index) => {
+  const cacheKey = normalizedKeywords.join('\u0000');
+  if (cacheKey !== highlightRegexCacheKey) {
+    highlightRegexCacheKey = cacheKey;
+    highlightRegexCache = new RegExp(`(${normalizedKeywords.map(escapeRegExp).join('|')})`, 'gi');
+  }
+  return value.split(highlightRegexCache).map((part, index) => {
     const escapedPart = escapeHtml(part);
     return index % 2 === 1 ? `<mark class="highlight">${escapedPart}</mark>` : escapedPart;
   }).join('');
@@ -564,21 +797,21 @@ function handleKeyNavigation(event) {
       if (hasNavigationModifier) break;
       event.preventDefault();
       setSelectedIndex((selectedIndex + 1) % totalItems);
-      scrollToSelected();
+      scrollToSelected({ behavior: 'auto' });
       break;
 
     case 'ArrowUp':
       if (hasNavigationModifier) break;
       event.preventDefault();
       setSelectedIndex((selectedIndex - 1 + totalItems) % totalItems);
-      scrollToSelected();
+      scrollToSelected({ behavior: 'auto' });
       break;
 
     case 'Enter':
       event.preventDefault();
       {
         const selectedItem = bookmarkItems[selectedIndex >= 0 ? selectedIndex : 0];
-        const item = allItems.find(candidate => candidate.id === selectedItem.dataset.itemId);
+        const item = itemsById.get(String(selectedItem.dataset.itemId));
         const openInBackground = (event.ctrlKey || event.metaKey) && item?.type === 'bookmark';
         const openInCurrentTab = event.shiftKey && item?.type === 'bookmark';
 
@@ -717,7 +950,7 @@ function getSelectedResultContext() {
 
   if (!element) return null;
   const index = resultItems.indexOf(element);
-  const item = allItems.find(candidate => candidate.id === element.dataset.itemId);
+  const item = itemsById.get(String(element.dataset.itemId));
   return item ? { element, index, item } : null;
 }
 
@@ -734,7 +967,7 @@ function selectAdjacentFolder(direction) {
     const index = (startIndex + direction * offset + resultItems.length) % resultItems.length;
     if (resultItems[index].dataset.itemType === 'folder') {
       setSelectedIndex(index);
-      scrollToSelected();
+      scrollToSelected({ behavior: 'auto' });
       syncFocusedResultToSelection();
       return;
     }
@@ -789,7 +1022,7 @@ function moveFocusedResultSelection(direction) {
   const nextIndex = (currentIndex + direction + resultItems.length) % resultItems.length;
   setSelectedIndex(nextIndex);
   resultItems[nextIndex].focus({ preventScroll: true });
-  scrollToSelected();
+  scrollToSelected({ behavior: 'auto' });
 }
 
 function syncFocusedResultToSelection() {
@@ -810,11 +1043,15 @@ function openSelectedBookmarkActions(selection = getSelectedResultContext()) {
 
 function setSelectedIndex(index) {
   const bookmarkItems = resultsContainer.querySelectorAll('.bookmark-item');
-  bookmarkItems.forEach(item => item.classList.remove('selected'));
+  bookmarkItems.forEach(item => {
+    item.classList.remove('selected');
+    item.setAttribute('aria-selected', 'false');
+  });
 
   if (index >= 0 && index < bookmarkItems.length) {
     selectedIndex = index;
     bookmarkItems[index].classList.add('selected');
+    bookmarkItems[index].setAttribute('aria-selected', 'true');
     searchInput.setAttribute('aria-activedescendant', bookmarkItems[index].id);
   } else {
     selectedIndex = -1;
@@ -822,11 +1059,11 @@ function setSelectedIndex(index) {
   }
 }
 
-function scrollToSelected() {
+function scrollToSelected({ behavior = 'smooth' } = {}) {
   const selectedItem = resultsContainer.querySelector('.bookmark-item.selected');
   if (selectedItem) {
     selectedItem.scrollIntoView({
-      behavior: reducedMotionQuery.matches ? 'auto' : 'smooth',
+      behavior: reducedMotionQuery.matches ? 'auto' : behavior,
       block: 'nearest'
     });
   }
@@ -865,11 +1102,11 @@ function updateNavigation() {
 
 function getFolderChain(folderId) {
   const chain = [];
-  let activeFolder = allItems.find(item => item.type === 'folder' && item.id === folderId);
+  let activeFolder = foldersById.get(String(folderId));
 
   while (activeFolder) {
     chain.unshift({ id: activeFolder.id, title: activeFolder.title });
-    activeFolder = allItems.find(item => item.type === 'folder' && item.id === activeFolder.parentId);
+    activeFolder = foldersById.get(String(activeFolder.parentId));
   }
 
   return chain;
@@ -888,7 +1125,7 @@ function handleBack() {
   if (currentFolderId === null) return;
 
   const previousFolderId = currentFolderId;
-  const currentFolder = allItems.find(item => item.type === 'folder' && item.id === currentFolderId);
+  const currentFolder = foldersById.get(String(currentFolderId));
   navigateToFolder(currentFolder ? currentFolder.parentId : null);
 
   const previousFolderIndex = [...resultsContainer.querySelectorAll('.bookmark-item')]
@@ -907,7 +1144,7 @@ function updateStats(displayedCount, query) {
   if (!query.isEmpty) {
     resultCount.textContent = `${displayedCount} 项`;
   } else if (currentFolderId === null) {
-    resultCount.textContent = `${allBookmarks.length} 个书签`;
+    resultCount.textContent = `${getItemsForParent(null).length} 个顶层项目（全库 ${allBookmarks.length} 个书签）`;
   } else {
     resultCount.textContent = `${displayedCount} 项`;
   }
@@ -915,17 +1152,45 @@ function updateStats(displayedCount, query) {
 
 // ==================== 最近使用 ====================
 async function openBookmark(url, bookmark, disposition = 'foreground') {
-  try {
-    await addToRecentBookmarks(bookmark);
-  } catch (error) {
-    console.error('保存使用记录失败:', error);
+  if (!isAllowedBookmarkUrl(url)) {
+    showError('此书签使用了不受支持的网址协议');
+    return;
   }
 
-  if (disposition === 'current') {
-    chrome.tabs.update({ url });
-  } else {
-    chrome.tabs.create({ url, active: disposition !== 'background' });
+  const historyPromise = addToRecentBookmarks(bookmark).catch(error => {
+    console.error('保存使用记录失败:', error);
+  });
+
+  try {
+    await openBookmarkTab(url, disposition);
+  } catch (error) {
+    console.error('打开书签失败:', error);
+    showError('无法打开此书签，请检查网址');
   }
+
+  await historyPromise;
+}
+
+function openBookmarkTab(url, disposition) {
+  return new Promise((resolve, reject) => {
+    const callback = () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    };
+
+    try {
+      if (disposition === 'current') {
+        chrome.tabs.update({ url }, callback);
+      } else {
+        chrome.tabs.create({ url, active: disposition !== 'background' }, callback);
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 async function addToRecentBookmarks(bookmark) {
@@ -960,11 +1225,12 @@ function displayRecentBookmarks() {
     button.type = 'button';
     button.className = 'recent-bookmark-item';
     button.title = bookmark.url;
-    button.setAttribute('aria-label', `打开最近使用的书签 ${bookmark.title}`);
+    button.setAttribute('aria-label', `打开最近使用的书签 ${bookmark.title}，${getDisplayUrl(bookmark.url)}`);
 
-    const faviconUrl = settings.showFavicon ? getFaviconUrl(bookmark.url) : '';
+    const faviconDomain = getFaviconDomain(bookmark.url);
+    const faviconUrl = settings.showFavicon ? getFaviconUrl(bookmark.url, faviconDomain) : '';
     const iconContent = faviconUrl
-      ? `<img src="${escapeHtml(faviconUrl)}" alt="">`
+      ? `<img src="${escapeHtml(faviconUrl)}" class="bookmark-favicon" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-favicon-domain="${escapeHtml(faviconDomain)}" data-fallback="${escapeHtml(getSiteInitial(bookmark))}" alt="">`
       : escapeHtml(getSiteInitial(bookmark));
 
     button.innerHTML = `
@@ -974,13 +1240,6 @@ function displayRecentBookmarks() {
         <span class="recent-domain">${escapeHtml(getDisplayUrl(bookmark.url))}</span>
       </span>
     `;
-
-    const favicon = button.querySelector('img');
-    if (favicon) {
-      favicon.addEventListener('error', () => {
-        favicon.parentElement.textContent = getSiteInitial(bookmark);
-      }, { once: true });
-    }
 
     button.addEventListener('click', () => openBookmark(bookmark.url, bookmark));
     button.addEventListener('contextmenu', event => {
@@ -1011,9 +1270,13 @@ function showSearchHistory() {
 
   searchHistoryEl.innerHTML = '';
   historySelectedIndex = -1;
+  // The same combobox owns both the history popup and the results listbox.
+  // Never leave an old result id in aria-activedescendant while history is open.
+  searchInput.removeAttribute('aria-activedescendant');
 
   const label = document.createElement('span');
   label.className = 'history-label';
+  label.setAttribute('role', 'presentation');
   label.textContent = '最近搜索';
   searchHistoryEl.appendChild(label);
 
@@ -1022,6 +1285,8 @@ function showSearchHistory() {
     button.type = 'button';
     button.className = 'history-item';
     button.id = `history-item-${index}`;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
     button.innerHTML = iconSvg('history');
 
     const text = document.createElement('span');
@@ -1041,32 +1306,49 @@ function showSearchHistory() {
 
   const divider = document.createElement('div');
   divider.className = 'history-divider';
+  divider.setAttribute('role', 'presentation');
   searchHistoryEl.appendChild(divider);
 
   const clearButton = document.createElement('button');
   clearButton.type = 'button';
   clearButton.className = 'history-item clear-history-item';
+  clearButton.setAttribute('role', 'option');
+  clearButton.setAttribute('aria-selected', 'false');
+  clearButton.setAttribute('aria-label', '清空搜索历史');
   clearButton.innerHTML = `${iconSvg('trash')}<span>清空搜索历史</span>`;
   clearButton.addEventListener('click', clearSearchHistory);
   searchHistoryEl.appendChild(clearButton);
 
   searchHistoryEl.hidden = false;
+  syncSearchExpandedState();
 }
 
 function hideSearchHistory() {
   searchHistoryEl.hidden = true;
   historySelectedIndex = -1;
   searchInput.removeAttribute('aria-activedescendant');
+  syncSearchExpandedState();
+}
+
+function syncSearchExpandedState() {
+  searchInput.setAttribute('aria-expanded', String(!resultsSection.hidden || !searchHistoryEl.hidden));
 }
 
 function setHistorySelectedIndex(index) {
   const historyItems = searchHistoryEl.querySelectorAll('.history-item:not(.clear-history-item)');
-  historyItems.forEach(item => item.classList.remove('selected'));
+  historySelectedIndex = -1;
+  historyItems.forEach(item => {
+    item.classList.remove('selected');
+    item.setAttribute('aria-selected', 'false');
+  });
 
   if (index >= 0 && index < historyItems.length) {
     historySelectedIndex = index;
     historyItems[index].classList.add('selected');
+    historyItems[index].setAttribute('aria-selected', 'true');
     searchInput.setAttribute('aria-activedescendant', historyItems[index].id);
+  } else {
+    searchInput.removeAttribute('aria-activedescendant');
   }
 }
 
@@ -1096,6 +1378,10 @@ function openBookmarkActions(bookmark, { anchor = null, clientX = null, clientY 
   hideSearchHistory();
   activeActionBookmark = bookmark;
   actionMenuLastFocusedElement = anchor || document.activeElement;
+  if (actionMenuLastFocusedElement instanceof HTMLElement
+    && actionMenuLastFocusedElement.classList.contains('bookmark-action-trigger')) {
+    actionMenuLastFocusedElement.setAttribute('aria-expanded', 'true');
+  }
   bookmarkActionsTitle.textContent = bookmark.title;
   bookmarkActions.hidden = false;
   bookmarkActions.setAttribute('aria-hidden', 'false');
@@ -1129,6 +1415,10 @@ function closeBookmarkActions(restoreFocus = true) {
   if (bookmarkActions.hidden) return;
 
   const focusTarget = actionMenuLastFocusedElement;
+  if (focusTarget instanceof HTMLElement
+    && focusTarget.classList.contains('bookmark-action-trigger')) {
+    focusTarget.setAttribute('aria-expanded', 'false');
+  }
   bookmarkActions.hidden = true;
   bookmarkActions.setAttribute('aria-hidden', 'true');
   activeActionBookmark = null;
@@ -1264,11 +1554,8 @@ async function saveBookmarkChanges(event) {
     return;
   }
 
-  try {
-    const parsedUrl = new URL(url);
-    if (!parsedUrl.protocol) throw new Error('missing protocol');
-  } catch {
-    showBookmarkEditorError('请输入完整网址，例如 https://example.com。');
+  if (!isAllowedBookmarkUrl(url)) {
+    showBookmarkEditorError('请输入受支持的网址，例如 https://example.com。');
     bookmarkUrlInput.focus();
     return;
   }
@@ -1293,6 +1580,19 @@ async function saveBookmarkChanges(event) {
     showBookmarkEditorError('保存失败，请稍后重试。');
     saveBookmarkEditor.disabled = false;
     saveBookmarkEditor.textContent = '保存修改';
+  }
+}
+
+function isAllowedBookmarkUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    if (!allowedBookmarkProtocols.has(parsedUrl.protocol)) return false;
+    if (['http:', 'https:', 'ftp:'].includes(parsedUrl.protocol) && !parsedUrl.hostname) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -1414,7 +1714,7 @@ function openSettings() {
   settingsPanelAnimation = settingsPanel.animate(
     [{ opacity: 0 }, { opacity: 1 }],
     {
-      duration: reducedMotion ? 140 : 260,
+      duration: reducedMotion ? 1 : 180,
       easing: 'ease-out',
       fill: 'both'
     }
@@ -1427,7 +1727,7 @@ function openSettings() {
           { opacity: 1, transform: 'translateX(0)' }
         ],
     {
-      duration: reducedMotion ? 140 : 420,
+      duration: reducedMotion ? 1 : 260,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
       fill: 'both'
     }
@@ -1460,7 +1760,7 @@ function closeSettingsPanel() {
   settingsPanelAnimation = settingsPanel.animate(
     [{ opacity: panelOpacity }, { opacity: 0 }],
     {
-      duration: reducedMotion ? 120 : 240,
+      duration: reducedMotion ? 1 : 160,
       easing: 'ease-in',
       fill: 'both'
     }
@@ -1473,7 +1773,7 @@ function closeSettingsPanel() {
           { opacity: 0.25, transform: 'translateX(100%)' }
         ],
     {
-      duration: reducedMotion ? 120 : 320,
+      duration: reducedMotion ? 1 : 220,
       easing: 'cubic-bezier(0.4, 0, 1, 1)',
       fill: 'both'
     }
@@ -1601,7 +1901,9 @@ async function loadSettings() {
         return;
       }
 
-      const savedSettings = result.settings || {};
+      const savedSettings = result.settings && typeof result.settings === 'object'
+        ? result.settings
+        : {};
       const migratedTheme = ['system', 'light', 'dark'].includes(savedSettings.themeMode)
         ? savedSettings.themeMode
         : typeof savedSettings.darkMode === 'boolean'
@@ -1614,9 +1916,14 @@ async function loadSettings() {
 
       settings = {
         ...settings,
-        ...savedSettings,
         themeMode: migratedTheme,
-        colorTheme: migratedColorTheme
+        colorTheme: migratedColorTheme,
+        showFavicon: typeof savedSettings.showFavicon === 'boolean'
+          ? savedSettings.showFavicon
+          : settings.showFavicon,
+        fuzzySearch: typeof savedSettings.fuzzySearch === 'boolean'
+          ? savedSettings.fuzzySearch
+          : settings.fuzzySearch
       };
       delete settings.darkMode;
 
@@ -1629,15 +1936,24 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  return new Promise((resolve, reject) => {
-    chrome.storage.sync.set({ settings }, () => {
+  const snapshot = {
+    settings: {
+      themeMode: settings.themeMode,
+      colorTheme: settings.colorTheme,
+      showFavicon: settings.showFavicon,
+      fuzzySearch: settings.fuzzySearch
+    }
+  };
+  settingsSaveQueue = settingsSaveQueue.catch(() => {}).then(() => new Promise((resolve, reject) => {
+    chrome.storage.sync.set(snapshot, () => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve();
       }
     });
-  });
+  }));
+  return settingsSaveQueue;
 }
 
 function persistSettings() {
@@ -1655,39 +1971,89 @@ async function loadHistory() {
         return;
       }
 
-      recentBookmarks = Array.isArray(result.recentBookmarks) ? result.recentBookmarks : [];
-      searchHistory = Array.isArray(result.searchHistory) ? result.searchHistory : [];
-      usageStats = result.usageStats
-        && typeof result.usageStats === 'object'
-        && !Array.isArray(result.usageStats)
-        ? result.usageStats
-        : {};
+      recentBookmarks = sanitizeRecentBookmarks(result.recentBookmarks);
+      searchHistory = sanitizeSearchHistory(result.searchHistory);
+      usageStats = sanitizeUsageStats(result.usageStats);
       resolve();
     });
   });
 }
 
-async function saveHistory() {
-  return new Promise((resolve, reject) => {
-    usageStats = Object.fromEntries(
-      Object.entries(usageStats)
-        .filter(([, usage]) => usage && typeof usage === 'object')
-        .sort((first, second) => (second[1].lastUsed || 0) - (first[1].lastUsed || 0))
-        .slice(0, 250)
-    );
-    chrome.storage.local.set({ recentBookmarks, searchHistory, usageStats }, () => {
+function sanitizeRecentBookmarks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(item => item && (typeof item.id === 'string' || typeof item.id === 'number'))
+    .map(item => ({
+      id: String(item.id),
+      type: 'bookmark',
+      title: String(item.title || '').slice(0, 255),
+      url: String(item.url || '').slice(0, 4096),
+      path: String(item.path || '根目录').slice(0, 2048),
+      parentId: item.parentId === null || item.parentId === undefined ? null : String(item.parentId)
+    }))
+    .filter(item => item.title && item.url && isAllowedBookmarkUrl(item.url))
+    .slice(0, 4);
+}
+
+function sanitizeSearchHistory(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(item => String(item || '').trim().slice(0, 200))
+    .filter(item => {
+      const key = item.toLocaleLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function sanitizeUsageStats(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([id, usage]) => {
+        if (!id || !usage || typeof usage !== 'object') return false;
+        const count = Number(usage.count);
+        const lastUsed = Number(usage.lastUsed);
+        return Number.isFinite(count) && count >= 0 && Number.isFinite(lastUsed) && lastUsed >= 0;
+      })
+      .map(([id, usage]) => [String(id), {
+        count: Math.min(1000000, Math.floor(Number(usage.count))),
+        lastUsed: Math.min(Date.now(), Number(usage.lastUsed))
+      }])
+      .sort((first, second) => second[1].lastUsed - first[1].lastUsed)
+      .slice(0, 250)
+  );
+}
+
+function saveHistory() {
+  recentBookmarks = sanitizeRecentBookmarks(recentBookmarks);
+  searchHistory = sanitizeSearchHistory(searchHistory);
+  usageStats = sanitizeUsageStats(usageStats);
+  const snapshot = {
+    recentBookmarks: recentBookmarks.map(item => ({ ...item })),
+    searchHistory: [...searchHistory],
+    usageStats: Object.fromEntries(Object.entries(usageStats).map(([id, usage]) => [id, { ...usage }]))
+  };
+
+  historySaveQueue = historySaveQueue.catch(() => {}).then(() => new Promise((resolve, reject) => {
+    chrome.storage.local.set(snapshot, () => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve();
       }
     });
-  });
+  }));
+  return historySaveQueue;
 }
 
 // ==================== UI 辅助函数 ====================
 function showLoading(show) {
   loadingState.hidden = !show;
+  contentArea.setAttribute('aria-busy', String(show));
 
   if (show) {
     recentSection.hidden = true;

@@ -63,6 +63,13 @@ test('连续字符获得更高模糊匹配分数', () => {
   assert.ok(fuzzyMatch('github documentation', 'github') > fuzzyMatch('git hub', 'github'));
 });
 
+test('模糊匹配公开 API 仍会规范化输入文本', () => {
+  assert.equal(
+    fuzzyMatch('  ＧＩＴＨＵＢ 文档  ', 'ＧＩＴ'),
+    fuzzyMatch('github 文档', 'git')
+  );
+});
+
 test('完全标题匹配优先于高频但较弱的 URL 匹配', () => {
   const rankedItems = [
     prepareSearchItem({
