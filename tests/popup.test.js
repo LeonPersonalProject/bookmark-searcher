@@ -206,6 +206,137 @@ function createPopup(items = [
   };
 }
 
+test('命令列出、过滤、键盘选择和点击执行，不记录搜索历史', () => {
+  const popup = createPopup();
+  popup.run("clearSearchHistory = () => { searchHistory = []; return Promise.resolve(); };");
+  popup.type('/');
+  assert.equal(popup.rows().length, 8);
+  assert.equal(popup.selected().dataset.command, 'clear');
+  popup.key('ArrowUp');
+  assert.equal(popup.selected().dataset.command, 'favicon');
+  popup.key('ArrowDown');
+  assert.equal(popup.selected().dataset.command, 'clear');
+  popup.type('/hom');
+  assert.equal(popup.rows().length, 1);
+  assert.equal(popup.input.getAttribute('aria-activedescendant'), 'command-item-0');
+  popup.rows()[0].click();
+  assert.equal(popup.input.value, '');
+  assert.equal(popup.run('searchHistory.length'), 0);
+  assert.deepEqual(popup.opened, []);
+});
+
+test('未知命令、错误参数与书签快捷键不会落到旧书签', () => {
+  for (const text of ['/unknown', '/clear nope', '/theme', '/theme dark extra', '/help extra']) {
+    const popup = createPopup();
+    popup.type('Atlas');
+    popup.flush();
+    popup.type(text);
+    for (const key of ['F2', 'Delete', 'ContextMenu', 'ArrowRight']) popup.key(key);
+    popup.key('Enter', { ctrlKey: true });
+    assert.deepEqual(popup.opened, []);
+    assert.equal(popup.input.value, text);
+    assert.match(popup.elements.get('errorToast').textContent, /未知命令|参数错误/);
+    assert.equal(popup.elements.get('bookmarkEditor').hidden, true);
+    popup.run('recordSearchKeyword()');
+    assert.equal(popup.run('searchHistory.length'), 0);
+    popup.key('Escape');
+    assert.equal(popup.input.value, '');
+  }
+});
+
+test('命令 IME 确认不执行，独立快速 Enter 执行最新参数', () => {
+  const popup = createPopup();
+  popup.run('persistSettings = () => {};');
+  popup.type('/fuzzy off');
+  popup.input.dispatch('compositionstart');
+  popup.type('/fuzzy on');
+  popup.key('Enter');
+  assert.equal(popup.run('settings.fuzzySearch'), false);
+  popup.input.dispatch('compositionend');
+  popup.key('Enter', { keyCode: 229 });
+  assert.equal(popup.run('settings.fuzzySearch'), false);
+  popup.key('Enter');
+  assert.equal(popup.run('settings.fuzzySearch'), true);
+  assert.equal(popup.input.value, '');
+});
+
+test('设置命令复用持久化，导航和帮助复用既有入口', async () => {
+  const popup = createPopup([
+    { id: 'folder', type: 'folder', title: 'Work', childCount: 1 },
+    { id: 'child', title: 'Child', url: 'https://child.example/', parentId: 'folder' }
+  ]);
+  popup.document.body = popup.document;
+  popup.run(`
+    let savedSettings = [];
+    chrome.runtime = {};
+    chrome.storage = { sync: { set: (snapshot, callback) => {
+      savedSettings.push(snapshot.settings); callback();
+    } } };
+  `);
+  for (const text of ['/theme dark', '/theme light', '/theme system', '/fuzzy on', '/fuzzy off', '/favicon off', '/favicon on']) {
+    popup.type(text);
+    popup.key('Enter');
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(popup.run('savedSettings.length'), 7);
+  assert.equal(popup.run('savedSettings[0].themeMode'), 'dark');
+  assert.equal(popup.run('savedSettings[5].showFavicon'), false);
+  popup.run("navigateToFolder('folder')");
+  popup.type('/back');
+  popup.key('Enter');
+  assert.equal(popup.run('currentFolderId'), null);
+  popup.run("navigateToFolder('folder')");
+  popup.type('/home');
+  popup.key('Enter');
+  assert.equal(popup.run('currentFolderId'), null);
+  popup.run('let openedPanel = ""; openSettings = () => { openedPanel = "settings"; }; openShortcutHelp = () => { openedPanel = "help"; };');
+  for (const name of ['settings', 'help']) {
+    popup.type(`/${name}`);
+    popup.key('Enter');
+    assert.equal(popup.run('openedPanel'), name);
+  }
+});
+
+test('设置保存失败显示现有错误提示', async () => {
+  const popup = createPopup();
+  popup.run('saveSettings = () => Promise.reject(new Error("storage unavailable"));');
+  popup.type('/fuzzy on');
+  popup.key('Enter');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(popup.elements.get('errorToast').textContent, /设置未能保存/);
+});
+
+test('// 搜索字面斜杠，仍能打开书签与重放历史', () => {
+  const popup = createPopup([{ id: 'slash', title: '/Atlas', url: 'https://atlas.example/' }]);
+  popup.type('//Atlas');
+  popup.key('Enter');
+  assert.equal(popup.opened[0].id, 'slash');
+  assert.equal(popup.run('searchHistory[0]'), '//Atlas');
+});
+
+test('/clear 和 /clear all 确认、取消及清理范围', async () => {
+  for (const command of ['/clear', '/clear all']) {
+    const popup = createPopup();
+    popup.run("searchHistory = ['Atlas']; recentBookmarks = [{ id: '1' }]; usageStats = { '1': { count: 2 } };");
+    popup.type(command);
+    assert.equal(popup.run('searchHistory.length'), 1);
+    popup.key('Enter');
+    assert.equal(popup.elements.get('confirmDialog').hidden, false);
+    popup.run('closeConfirmation(false)');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(popup.run('searchHistory.length'), 1);
+    popup.type(command);
+    popup.key('Enter');
+    popup.run('closeConfirmation(true)');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(popup.run('searchHistory.length'), 0);
+    assert.equal(popup.run('recentBookmarks.length'), command === '/clear' ? 1 : 0);
+    assert.equal(popup.run('Object.keys(usageStats).length'), command === '/clear' ? 1 : 0);
+    assert.equal(popup.run('allBookmarks.length'), 3);
+    assert.equal(popup.run('settings.themeMode'), 'system');
+  }
+});
+
 test('搜索自动选中首项且保留输入焦点，上下键从首项切换并循环', () => {
   const popup = createPopup();
   assert.equal(popup.selected(), null);

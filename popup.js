@@ -5,6 +5,18 @@ let itemsByParentId = new Map();
 let foldersById = new Map();
 let itemsById = new Map();
 let selectedIndex = -1;
+let commandOptions = [];
+let commandBusy = false;
+const commands = [
+  { name: 'clear', usage: '/clear [all]', description: '清空搜索历史；all 同时清空最近使用和使用统计', args: ['', 'all'] },
+  { name: 'help', usage: '/help', description: '命令说明与现有快捷键', args: [''] },
+  { name: 'settings', usage: '/settings', description: '打开设置', args: [''] },
+  { name: 'home', usage: '/home', description: '返回根目录', args: [''] },
+  { name: 'back', usage: '/back', description: '返回上级目录', args: [''] },
+  { name: 'theme', usage: '/theme system|light|dark', description: '设置外观模式', args: ['system', 'light', 'dark'] },
+  { name: 'fuzzy', usage: '/fuzzy on|off', description: '开关模糊搜索', args: ['on', 'off'] },
+  { name: 'favicon', usage: '/favicon on|off', description: '开关网站图标', args: ['on', 'off'] }
+];
 let currentFolderId = null;
 let searchTimeout = null;
 let isSearchComposing = false;
@@ -414,13 +426,125 @@ function pruneHistoryAgainstBookmarks() {
   return changed;
 }
 
+function isCommandMode() {
+  return searchInput.value.startsWith('/') && !searchInput.value.startsWith('//');
+}
+
+function getSearchText() {
+  return searchInput.value.startsWith('//') ? searchInput.value.slice(1) : searchInput.value;
+}
+
+function renderCommands() {
+  hideSearchHistory();
+  resultsContainer.innerHTML = '';
+  resultsMore.innerHTML = '';
+  resultsMore.hidden = true;
+  recentSection.hidden = true;
+  emptyState.hidden = true;
+  resultsSection.hidden = false;
+  resultsTitle.textContent = '命令';
+  resultsContainer.setAttribute('aria-label', '命令列表');
+  const text = searchInput.value.slice(1).trim().toLowerCase();
+  const [name] = text.split(/\s+/);
+  const exact = commands.find(command => command.name === name);
+  commandOptions = exact ? [exact] : commands.filter(command => command.name.startsWith(text));
+  resultsMeta.textContent = commandOptions.length ? 'Enter 或点击执行 · Esc 退出' : '未知命令，请输入 /help';
+  resultCount.textContent = `${commandOptions.length} 个命令`;
+  commandOptions.forEach((command, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'bookmark-item';
+    button.id = `command-item-${index}`;
+    button.dataset.index = index;
+    button.dataset.command = command.name;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
+    button.innerHTML = `<span class="item-icon">${iconSvg('chevron-right')}</span><span class="item-copy"><span class="bookmark-title">${escapeHtml(command.usage)}</span><span class="bookmark-meta">${escapeHtml(command.description)}</span></span>`;
+    resultsContainer.appendChild(button);
+  });
+  setSelectedIndex(commandOptions.length && !isSearchComposing ? 0 : -1);
+  enterActionLabel.textContent = '执行';
+  updateNavigation();
+  syncSearchExpandedState();
+  contentArea.scrollTop = 0;
+}
+
+async function executeCommand(name = commandOptions[selectedIndex]?.name) {
+  if (!isCommandMode() || isSearchComposing || commandBusy) return;
+  const text = searchInput.value.slice(1).trim().toLowerCase();
+  const parts = text.split(/\s+/);
+  const exact = commands.find(command => command.name === parts[0]);
+  const command = exact || commands.find(item => item.name === name);
+  if (!command) {
+    showError('未知命令，请输入 /help');
+    return;
+  }
+  const argument = parts.slice(1).join(' ');
+  if (!command.args.includes(argument)) {
+    showError(`参数错误，用法：${command.usage}`);
+    return;
+  }
+  commandBusy = true;
+  try {
+    // Leave command mode before opening a modal so its focus restoration is safe.
+    clearSearch();
+    hideSearchHistory();
+    switch (command.name) {
+      case 'clear':
+        await (argument === 'all' ? clearHistory() : clearSearchHistory());
+        break;
+      case 'help': openShortcutHelp(); break;
+      case 'settings': openSettings(); break;
+      case 'home': navigateToFolder(null); break;
+      case 'back': handleBack(); break;
+      case 'theme': changeThemeMode({ target: { value: argument } }); break;
+      case 'fuzzy':
+        fuzzySearchToggle.checked = argument === 'on';
+        toggleFuzzySearch();
+        break;
+      case 'favicon':
+        showFaviconToggle.checked = argument === 'on';
+        toggleFavicon();
+        break;
+    }
+  } catch (error) {
+    console.error('执行命令失败:', error);
+    showError('命令执行失败，请稍后重试');
+  } finally {
+    commandBusy = false;
+  }
+}
+
+function handleCommandKeyboard(event) {
+  if (!isCommandMode()) return false;
+  if (isComposingKey(event)) return true;
+  flushPendingSearch();
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    clearSearch();
+    hideSearchHistory();
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    executeCommand();
+  } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp')
+    && !event.ctrlKey && !event.metaKey && !event.altKey && commandOptions.length) {
+    event.preventDefault();
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    setSelectedIndex((selectedIndex + direction + commandOptions.length) % commandOptions.length);
+    scrollToSelected({ behavior: 'auto' });
+  }
+  return true;
+}
+
 // ==================== 搜索与排序 ====================
 function handleSearchWithDebounce() {
   clearTimeout(searchTimeout);
   searchTimeout = null;
   toggleClearButton();
   hideSearchHistory();
-  if (!isSearchComposing) {
+  if (isCommandMode()) {
+    updateView();
+  } else if (!isSearchComposing) {
     searchTimeout = setTimeout(updateView, 140);
   }
 }
@@ -452,7 +576,13 @@ function updateView() {
   // A view refresh can detach the element that opened the action menu. Close
   // it before replacing result rows so stale actions cannot remain actionable.
   closeBookmarkActions(false);
-  const query = parseSearchQuery(searchInput.value);
+  if (isCommandMode()) {
+    renderCommands();
+    return;
+  }
+  commandOptions = [];
+  resultsContainer.setAttribute('aria-label', '书签结果');
+  const query = parseSearchQuery(getSearchText());
   const sourceItems = currentFolderId === null
     ? (query.isEmpty ? getItemsForParent(null) : allItems)
     : getItemsForParent(currentFolderId);
@@ -628,6 +758,13 @@ function handleResultsFocus(event) {
 }
 
 function handleResultsClick(event) {
+  if (isCommandMode()) {
+    const button = event.target instanceof Element ? event.target.closest('.bookmark-item') : null;
+    if (button && resultsContainer.contains(button) && button.dataset.command) {
+      executeCommand(button.dataset.command);
+    }
+    return;
+  }
   const actionTrigger = event.target instanceof Element
     ? event.target.closest('.bookmark-action-trigger')
     : null;
@@ -787,7 +924,8 @@ function isComposingKey(event) {
 }
 
 function handleKeyNavigation(event) {
-  if (isComposingKey(event)) return;
+  if (isComposingKey(event) || isKeyboardLayerOpen()) return;
+  if (handleCommandKeyboard(event)) return;
   if (handleEnhancedKeyboardShortcut(event)) return;
 
   const hasNavigationModifier = event.altKey || event.ctrlKey || event.metaKey;
@@ -862,6 +1000,7 @@ function handleKeyNavigation(event) {
 
 function handleGlobalKeyboardShortcuts(event) {
   if (event.defaultPrevented || isKeyboardLayerOpen() || isComposingKey(event)) return;
+  if (handleCommandKeyboard(event)) return;
   if (handleEnhancedKeyboardShortcut(event)) return;
 
   if (event.key === 'Escape') {
@@ -902,7 +1041,7 @@ function isKeyboardLayerOpen() {
 }
 
 function handleEnhancedKeyboardShortcut(event) {
-  if (isComposingKey(event)) return false;
+  if (isComposingKey(event) || isCommandMode()) return false;
   if (['Enter', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End',
     'PageDown', 'PageUp', 'F2', 'F10', 'ContextMenu'].includes(event.key)) {
     flushPendingSearch();
@@ -1098,7 +1237,8 @@ function setSelectedIndex(index) {
   }
 
   const target = bookmarkItems[selectedIndex >= 0 ? selectedIndex : 0];
-  enterActionLabel.textContent = target?.dataset.itemType === 'folder' ? '进入' : '打开';
+  enterActionLabel.textContent = isCommandMode() ? '执行'
+    : target?.dataset.itemType === 'folder' ? '进入' : '打开';
 }
 
 function scrollToSelected({ behavior = 'smooth' } = {}) {
@@ -1295,7 +1435,7 @@ function displayRecentBookmarks() {
 // ==================== 搜索历史 ====================
 function recordSearchKeyword({ persist = true } = {}) {
   const keyword = searchInput.value.trim();
-  if (!keyword) return;
+  if (!keyword || isCommandMode()) return;
 
   searchHistory = searchHistory.filter(item => item.toLowerCase() !== keyword.toLowerCase());
   searchHistory.unshift(keyword);
