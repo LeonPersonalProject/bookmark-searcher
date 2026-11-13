@@ -19,14 +19,23 @@ test('HTML ID 唯一且脚本引用的元素都存在', () => {
   assert.deepEqual(referencedIds.filter(id => !uniqueIds.has(id)), []);
 });
 
-test('搜索与键盘核心在弹窗逻辑之前加载', () => {
-  const searchScriptIndex = html.indexOf('<script src="search.js"></script>');
-  const keyboardScriptIndex = html.indexOf('<script src="keyboard.js"></script>');
-  const popupScriptIndex = html.indexOf('<script src="popup.js"></script>');
+test('浏览器核心按依赖顺序在弹窗逻辑之前加载', () => {
+  const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"[^>]*>/g)]
+    .map(match => match[1]);
 
-  assert.ok(searchScriptIndex >= 0);
-  assert.ok(keyboardScriptIndex > searchScriptIndex);
-  assert.ok(popupScriptIndex > keyboardScriptIndex);
+  assert.deepEqual(scripts, [
+    'pinyin.js',
+    'search.js',
+    'keyboard.js',
+    'storage.js',
+    'bookmarks.js',
+    'commands.js',
+    'dialogs.js',
+    'popup.js'
+  ]);
+  scripts.forEach(script => {
+    assert.ok(fs.existsSync(path.join(projectRoot, script)), `${script} 必须存在`);
+  });
 });
 
 test('CSS 大括号匹配', () => {
@@ -142,7 +151,7 @@ test('浅色主题的 secondary 与 tertiary 文本保持可读对比度', () =>
         `${theme} secondary 文本与 ${background} 的对比度不足`
       );
       assert.ok(
-        contrastRatio(tokens['text-tertiary'], background) >= 3,
+        contrastRatio(tokens['text-tertiary'], background) >= 4.5,
         `${theme} tertiary 文本与 ${background} 的对比度不足`
       );
     }

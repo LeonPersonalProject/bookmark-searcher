@@ -2,15 +2,17 @@
 
 ## Project Structure & Module Organization
 
-This repository is a dependency-free Manifest V3 browser extension. `manifest.json` declares permissions, icons, the popup entry point, and the keyboard command. The UI is split across `popup.html`, `popup.css`, and `popup.js`; keep markup, presentation, and Chrome API behavior in their respective files. PNG extension icons live in `icons/`, while `logo.svg` and `logo-small.svg` are editable source assets. Use `generate-icons.html` to regenerate icon sizes. Release notes and contributor-facing documentation live in `CHANGELOG.md`, `README.md`, and `CONTRIBUTING.md`.
+This repository is a dependency-free Manifest V3 browser extension. `manifest.json` declares permissions, icons, the popup entry point, and the keyboard command. Keep markup in `popup.html`, presentation in `popup.css`, and UI coordination in `popup.js`. Small native modules provide search (`search.js` and `pinyin.js`), keyboard mapping (`keyboard.js`), persistence (`storage.js`), commands (`commands.js`), bookmark indexing and icon privacy rules (`bookmarks.js`), and dialogs (`dialogs.js`); they are browser globals and can also be required by Node tests. PNG extension icons live in `icons/`, while `logo.svg` and `logo-small.svg` are editable source assets. Use `generate-icons.html` to regenerate icon sizes. Release notes and contributor-facing documentation live in `CHANGELOG.md`, `README.md`, and `CONTRIBUTING.md`. Keep the bundled pinyin data attribution and license in `PINYIN-DATA.md` and `UNICODE-LICENSE.txt` when packaging.
 
 ## Build, Test, and Development Commands
 
 There is no package manager or compilation step.
 
 - Load the repository directory through `chrome://extensions/` or `edge://extensions/` using **Load unpacked** for local development.
-- Run `node --check popup.js` to catch JavaScript syntax errors.
-- Run `python3 -m json.tool manifest.json >/dev/null` to validate manifest JSON.
+- Run `bash check.sh` for JavaScript syntax, Manifest JSON, shell syntax, static checks, and Node's built-in tests.
+- Run `bash check.sh --browser` to add the optional Chromium UI check, or `node scripts/browser-check.cjs` for that check alone. Install development tools with `npm install --no-save --package-lock=false playwright@1.62.1` and `npx playwright install chromium`; the extension itself has no runtime dependencies. `PLAYWRIGHT_MODULE` can point to an existing Playwright module, `BROWSER_EXECUTABLE` selects a local Chrome/Chromium executable, and `BROWSER_CHECK_OUTPUT` selects the screenshot directory (otherwise a temporary directory is printed).
+- Run `node --test tests/storage.test.js` or another relevant test file for a focused check during development.
+- Run `node scripts/benchmark.cjs` for synthetic 1,000 / 10,000 / 50,000 bookmark trees. Optional numeric arguments select smaller samples, such as `node scripts/benchmark.cjs 1000`. This only measures indexing and querying; it does not read real bookmarks or measure popup rendering.
 - Run `bash build.sh` to create `release/bookmark-searcher-v<version>.zip`; this requires the `zip` utility and recreates `release/`.
 
 After changing extension files, reload the extension from the browser's extensions page before testing.
@@ -21,7 +23,7 @@ Use ES6+ JavaScript with two-space indentation, semicolons, `const`/`let`, and `
 
 ## Testing Guidelines
 
-No automated test suite or coverage threshold exists. Manually verify bookmark loading, exact and fuzzy search, folder navigation, keyboard controls, settings persistence, recent/history behavior, favicon display, and both themes. Test at least Chrome or Edge, inspect the popup console for errors, and check that CSP and requested permissions still match runtime behavior.
+Tests in `tests/` use Node's built-in test runner; no coverage threshold is configured. Keep meaningful tests for search ranking, pinyin and domain matching, command execution, storage errors and queues, keyboard behavior, and popup semantics. The optional browser check exercises real Chromium DOM, native keyboard behavior, dialogs, search scope, pagination, navigation recovery, pins, retries, and twelve light/dark theme combinations. It injects fixture `chrome.bookmarks`, `chrome.storage`, and `chrome.tabs` APIs; do not call it end-to-end validation of a live extension. Loading the unpacked extension in Chrome or Edge is still required to verify actual platform APIs, permissions, the global shortcut, popup closure, and real bookmark reads/writes. Also manually verify offline/favicon display and inspect the popup console. Record privacy implications when changing external icon requests: preferences use `storage.sync`, while history, usage, and pinned bookmark IDs use `storage.local`.
 
 ## Commit & Pull Request Guidelines
 

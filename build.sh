@@ -26,10 +26,17 @@ required_files=(
   popup.html
   popup.css
   popup.js
+  pinyin.js
   search.js
+  storage.js
+  commands.js
+  bookmarks.js
+  dialogs.js
   keyboard.js
   README.md
   LICENSE
+  PINYIN-DATA.md
+  UNICODE-LICENSE.txt
   CHANGELOG.md
   logo.svg
   logo-small.svg

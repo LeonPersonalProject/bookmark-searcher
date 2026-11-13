@@ -33,5 +33,39 @@ jobs:
           version="$(node -p "require('./manifest.json').version")"
           archive="release/bookmark-searcher-v${version}.zip"
           test -f "$archive"
-          unzip -Z1 "$archive" | grep -Fx "bookmark-searcher-v${version}/search.js"
-          unzip -Z1 "$archive" | grep -Fx "bookmark-searcher-v${version}/keyboard.js"
+          for file in pinyin.js search.js storage.js commands.js bookmarks.js dialogs.js keyboard.js popup.js PINYIN-DATA.md UNICODE-LICENSE.txt; do
+            unzip -Z1 "$archive" | grep -Fx "bookmark-searcher-v${version}/$file"
+          done
+
+  browser:
+    name: Browser UI checks (fixture APIs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install optional browser check tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
+
+      - name: Check browser DOM, keyboard and layout with fixture Chrome APIs
+        env:
+          BROWSER_CHECK_OUTPUT: ${{ runner.temp }}/bookmark-browser-check
+        run: node scripts/browser-check.cjs
+
+      - name: Save browser check screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-check-screenshots
+          path: ${{ runner.temp }}/bookmark-browser-check
+          if-no-files-found: ignore
+          retention-days: 7

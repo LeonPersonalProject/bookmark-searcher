@@ -31,7 +31,7 @@
         <input
           type="search"
           id="searchInput"
-          placeholder="搜索多个关键词，或输入 domain:"
+          placeholder="搜索书签，输入 / 使用命令"
           autocomplete="off"
           autofocus
           role="combobox"
@@ -60,14 +60,26 @@
 
     <div class="context-bar">
       <nav id="breadcrumb" class="breadcrumb" aria-label="书签路径"></nav>
+      <button id="searchScopeButton" class="search-scope-button" type="button" hidden>当前文件夹及子目录</button>
       <span id="resultCount" class="result-count" aria-live="polite">加载中…</span>
     </div>
 
     <main id="contentArea" class="content-area">
+      <section id="pinnedSection" class="pinned-section" aria-labelledby="pinnedTitle" hidden>
+        <div class="section-heading">
+          <h2 id="pinnedTitle">固定书签</h2>
+          <button id="togglePinnedButton" class="section-toggle-button" type="button" aria-expanded="false" aria-controls="pinnedBookmarks">展开</button>
+        </div>
+        <div id="pinnedBookmarks" class="pinned-bookmarks"></div>
+      </section>
+
       <section id="recentSection" class="recent-section" aria-labelledby="recentTitle" hidden>
         <div class="section-heading">
           <h2 id="recentTitle">最近使用</h2>
-          <span id="recentCount" class="section-meta"></span>
+          <div class="section-heading-actions">
+            <span id="recentCount" class="section-meta"></span>
+            <button id="toggleRecentButton" class="section-toggle-button" type="button" aria-expanded="false" aria-controls="recentBookmarks">展开</button>
+          </div>
         </div>
         <div id="recentBookmarks" class="recent-bookmarks"></div>
       </section>
@@ -78,6 +90,18 @@
         <div class="skeleton-item"></div>
         <span class="visually-hidden">正在加载书签</span>
       </div>
+
+      <section id="loadErrorState" class="load-error-state" role="alert" aria-labelledby="loadErrorTitle" hidden>
+        <span class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3 2.8 19h18.4L12 3Z"></path>
+            <path d="M12 9v4M12 16.5v.5"></path>
+          </svg>
+        </span>
+        <h2 id="loadErrorTitle">书签加载失败</h2>
+        <p id="loadErrorMessage">请重试以重新加载书签。</p>
+        <button id="retryLoadButton" class="state-action-button state-action-primary" type="button">重新加载</button>
+      </section>
 
       <section id="resultsSection" class="results-section" aria-labelledby="resultsTitle" hidden>
         <div class="section-heading results-heading">
@@ -101,8 +125,13 @@
             <path d="m16 16 4 4M8.5 11h5"></path>
           </svg>
         </span>
-        <h2>没有找到匹配项</h2>
-        <p>试试更短的关键词，或切换模糊搜索。</p>
+        <h2 id="emptyTitle">没有找到匹配项</h2>
+        <p id="emptyMessage">试试更短的关键词，或切换模糊搜索。</p>
+        <div class="empty-actions">
+          <button id="emptyClearButton" class="state-action-button" type="button" hidden>清空搜索</button>
+          <button id="emptyScopeButton" class="state-action-button" type="button" hidden>搜索全部书签</button>
+          <button id="emptyFuzzyButton" class="state-action-button" type="button" hidden>开启模糊搜索</button>
+        </div>
       </section>
     </main>
 
@@ -135,6 +164,26 @@
       </svg>
       <span>编辑书签</span>
     </button>
+    <button type="button" role="menuitem" data-action="pin">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m15 3 6 6-5 1-3 5-4-4 5-3 1-5ZM9 15l-6 6"></path>
+      </svg>
+      <span id="pinActionLabel">固定书签</span>
+    </button>
+    <button type="button" role="menuitem" data-action="copy-url">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+        <path d="M15 8V4H4v11h4"></path>
+      </svg>
+      <span>复制网址</span>
+    </button>
+    <button type="button" role="menuitem" data-action="reveal-folder">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 7h6l2 2h10v10H3V7ZM3 7V5h7l2 2h8v2"></path>
+        <path d="m11 12 3 3-3 3M14 15H7"></path>
+      </svg>
+      <span>在所属文件夹中查看</span>
+    </button>
     <div class="bookmark-actions-divider" role="separator"></div>
     <button class="danger-menu-item" type="button" role="menuitem" data-action="delete">
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -157,7 +206,7 @@
           </svg>
         </button>
       </div>
-      <div class="shortcut-help-body">
+      <div id="shortcutHelpBody" class="shortcut-help-body" tabindex="0" role="region" aria-label="快捷键说明内容">
         <section class="shortcut-group" aria-labelledby="commandHelpTitle">
           <h3 id="commandHelpTitle">输入框命令</h3>
           <p>首字符 / 列出命令，继续输入过滤；↑ ↓ 选择，Enter 或点击执行，Esc 退出。输入不会执行，也不计搜索历史。// 转义为普通 / 开头搜索。</p>
@@ -202,10 +251,7 @@
   <div id="settingsPanel" class="settings-panel" aria-hidden="true" hidden>
     <aside class="settings-content" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <div class="settings-header">
-        <div>
-          <span class="eyebrow">偏好设置</span>
-          <h2 id="settingsTitle">个性化书签搜索</h2>
-        </div>
+        <h2 id="settingsTitle">设置</h2>
         <button id="closeSettings" class="icon-button" type="button" aria-label="关闭设置">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m7 7 10 10M17 7 7 17"></path>
@@ -283,8 +329,8 @@
         <div class="settings-group">
           <label class="setting-item" for="showFaviconToggle">
             <span class="setting-copy">
-              <span class="setting-title">显示网站图标</span>
-              <span class="setting-description">按需向 Google Favicon 请求并缓存域名图标</span>
+              <span class="setting-title">在线网站图标</span>
+              <span class="setting-description">关闭时使用离线图标；内部地址始终离线</span>
             </span>
             <input type="checkbox" id="showFaviconToggle" class="toggle" checked>
           </label>
@@ -362,8 +408,13 @@
     </form>
   </div>
 
+  <script src="pinyin.js"></script>
   <script src="search.js"></script>
   <script src="keyboard.js"></script>
+  <script src="storage.js"></script>
+  <script src="bookmarks.js"></script>
+  <script src="commands.js"></script>
+  <script src="dialogs.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
