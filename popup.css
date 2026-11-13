@@ -373,13 +373,12 @@ svg {
   width: 30px;
   height: 30px;
   overflow: hidden;
-  border-radius: 9px;
-  background: var(--brand-surface);
+  border-radius: 7px;
 }
 
 .brand-mark img {
-  width: 27px;
-  height: 27px;
+  width: 30px;
+  height: 30px;
 }
 
 .brand-name {

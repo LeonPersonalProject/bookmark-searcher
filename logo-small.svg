@@ -1,41 +1,10 @@
-<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bookmarkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#818cf8;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
-    </linearGradient>
-    <linearGradient id="searchGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#a5b4fc;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#818cf8;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-
-  <!-- 书签形状 -->
-  <path d="M 14 8 L 34 8 C 35.5 8 36 8.5 36 10 L 36 38 L 24 30 L 12 38 L 12 10 C 12 8.5 12.5 8 14 8 Z"
-        fill="url(#bookmarkGrad)"
-        opacity="0.9"/>
-
-  <!-- 书签装饰线 -->
-  <rect x="16" y="13" width="16" height="2" rx="1" fill="white" opacity="0.4"/>
-  <rect x="16" y="18" width="12" height="1.5" rx="0.75" fill="white" opacity="0.3"/>
-  <rect x="16" y="22" width="14" height="1.5" rx="0.75" fill="white" opacity="0.3"/>
-
-  <!-- 搜索放大镜 -->
-  <circle cx="33" cy="33" r="7"
-          fill="none"
-          stroke="url(#searchGrad)"
-          stroke-width="2.5"
-          opacity="0.95"/>
-  <circle cx="31" cy="31" r="2.5"
-          fill="white"
-          opacity="0.3"/>
-  <line x1="38" y1="38" x2="42" y2="42"
-        stroke="url(#searchGrad)"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        opacity="0.95"/>
-
-  <!-- 装饰光点 -->
-  <circle cx="18" cy="14" r="1" fill="white" opacity="0.6"/>
-  <circle cx="28" cy="12" r="0.8" fill="white" opacity="0.5"/>
+<svg width="48" height="48" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>书签搜索器：索引光标</title>
+  <rect width="16" height="16" rx="3.5" fill="#164F49"/>
+  <g fill="#85DFC6">
+    <rect x="3" y="4" width="5" height="1.5" rx="0.75"/>
+    <rect x="3" y="7.25" width="4" height="1.5" rx="0.75"/>
+    <rect x="3" y="10.5" width="5" height="1.5" rx="0.75"/>
+  </g>
+  <path d="M9.75 3H12.25Q13 3 13 3.75V13L11 11.5L9 13V3.75Q9 3 9.75 3Z" fill="#FFFFFF"/>
 </svg>

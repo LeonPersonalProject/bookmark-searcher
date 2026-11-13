@@ -19,7 +19,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     h1 {
-      color: #6366f1;
+      color: #164F49;
       margin-bottom: 20px;
     }
     .icons {
@@ -38,7 +38,7 @@
       margin-bottom: 10px;
     }
     button {
-      background: #6366f1;
+      background: #164F49;
       color: white;
       border: none;
       padding: 8px 16px;
@@ -48,25 +48,25 @@
       margin-top: 5px;
     }
     button:hover {
-      background: #4f46e5;
+      background: #103E39;
     }
     .instructions {
-      background: #f0f9ff;
-      border-left: 4px solid #6366f1;
+      background: #edf8f3;
+      border-left: 4px solid #164F49;
       padding: 15px;
       margin-top: 20px;
       border-radius: 4px;
     }
     .instructions h3 {
       margin-top: 0;
-      color: #6366f1;
+      color: #164F49;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🎨 书签搜索器图标生成器</h1>
-    <p>点击下载按钮保存对应尺寸的图标</p>
+    <p>索引列表与书签光标，采用深绿、薄荷绿和白色。16px 图标已单独调整线条和间距。</p>
 
     <div class="icons">
       <div class="icon-item">
@@ -98,128 +98,42 @@
   </div>
 
   <script>
-    // 绘制图标的函数
     function drawIcon(canvasId, size) {
       const canvas = document.getElementById(canvasId);
       const ctx = canvas.getContext('2d');
+      const isSmall = size === 16;
+      const designSize = isSmall ? 16 : 128;
 
-      // 启用抗锯齿
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(size / designSize, size / designSize);
+      ctx.fillStyle = '#164F49';
+      roundRect(ctx, 0, 0, designSize, designSize, isSmall ? 3.5 : 28);
 
-      // 缩放比例
-      const scale = size / 128;
+      // 16px 使用更粗的横线与更宽的书签，保持工具栏里的辨识度。
+      const rows = isSmall
+        ? [[3, 4, 5], [3, 7.25, 4], [3, 10.5, 5]]
+        : [[26, 36, 36], [26, 59, 28], [26, 82, 36]];
+      ctx.fillStyle = '#85DFC6';
+      for (const [x, y, width] of rows) {
+        roundRect(ctx, x, y, width, isSmall ? 1.5 : 10, isSmall ? 0.75 : 5);
+      }
 
-      // 背景渐变
-      const bgGradient = ctx.createLinearGradient(0, 0, size, size);
-      bgGradient.addColorStop(0, '#f5f7fa');
-      bgGradient.addColorStop(1, '#e0e7ff');
-
-      // 绘制圆角矩形背景
-      const radius = 24 * scale;
-      ctx.fillStyle = bgGradient;
-      ctx.beginPath();
-      ctx.moveTo(radius, 0);
-      ctx.lineTo(size - radius, 0);
-      ctx.quadraticCurveTo(size, 0, size, radius);
-      ctx.lineTo(size, size - radius);
-      ctx.quadraticCurveTo(size, size, size - radius, size);
-      ctx.lineTo(radius, size);
-      ctx.quadraticCurveTo(0, size, 0, size - radius);
-      ctx.lineTo(0, radius);
-      ctx.quadraticCurveTo(0, 0, radius, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // 书签渐变
-      const bookmarkGradient = ctx.createLinearGradient(0, 0, size, size);
-      bookmarkGradient.addColorStop(0, '#818cf8');
-      bookmarkGradient.addColorStop(1, '#6366f1');
-
-      // 绘制书签形状
-      ctx.fillStyle = bookmarkGradient;
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(45 * scale, 30 * scale);
-      ctx.lineTo(83 * scale, 30 * scale);
-      ctx.quadraticCurveTo(88 * scale, 30 * scale, 88 * scale, 35 * scale);
-      ctx.lineTo(88 * scale, 90 * scale);
-      ctx.lineTo(64 * scale, 75 * scale);
-      ctx.lineTo(40 * scale, 90 * scale);
-      ctx.lineTo(40 * scale, 35 * scale);
-      ctx.quadraticCurveTo(40 * scale, 30 * scale, 45 * scale, 30 * scale);
-      ctx.closePath();
-      ctx.fill();
-
-      // 书签装饰线
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = 'white';
-      roundRect(ctx, 48 * scale, 40 * scale, 32 * scale, 3 * scale, 1.5 * scale);
-
-      ctx.globalAlpha = 0.3;
-      roundRect(ctx, 48 * scale, 48 * scale, 24 * scale, 2.5 * scale, 1.25 * scale);
-      roundRect(ctx, 48 * scale, 55 * scale, 28 * scale, 2.5 * scale, 1.25 * scale);
-
-      // 搜索放大镜渐变
-      const searchGradient = ctx.createLinearGradient(0, 0, size, size);
-      searchGradient.addColorStop(0, '#a5b4fc');
-      searchGradient.addColorStop(1, '#818cf8');
-
-      // 绘制放大镜圆圈
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = searchGradient;
-      ctx.lineWidth = 5 * scale;
-      ctx.beginPath();
-      ctx.arc(85 * scale, 85 * scale, 16 * scale, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 放大镜内部高光
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(82 * scale, 82 * scale, 6 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 放大镜手柄
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = searchGradient;
-      ctx.lineWidth = 5 * scale;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(96 * scale, 96 * scale);
-      ctx.lineTo(106 * scale, 106 * scale);
-      ctx.stroke();
-
-      // 装饰光点
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(50 * scale, 45 * scale, 2 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath();
-      ctx.arc(70 * scale, 42 * scale, 1.5 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.arc(95 * scale, 70 * scale, 1.5 * scale, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fill(new Path2D(isSmall
+        ? 'M9.75 3H12.25Q13 3 13 3.75V13L11 11.5L9 13V3.75Q9 3 9.75 3Z'
+        : 'M78 28H98Q102 28 102 32V100L88 90L74 100V32Q74 28 78 28Z'));
+      ctx.restore();
     }
 
-    // 辅助函数：绘制圆角矩形
     function roundRect(ctx, x, y, width, height, radius) {
       ctx.beginPath();
       ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + width - radius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-      ctx.lineTo(x + width, y + height - radius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      ctx.lineTo(x + radius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
       ctx.closePath();
       ctx.fill();
     }
