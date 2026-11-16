@@ -884,11 +884,7 @@ function handleFaviconError(event) {
     if (failedFaviconDomains.size >= MAX_FAVICON_CACHE) failedFaviconDomains.delete(failedFaviconDomains.values().next().value);
     failedFaviconDomains.add(favicon.dataset.faviconDomain);
   }
-  if (favicon.dataset.fallback) {
-    favicon.parentElement.textContent = favicon.dataset.fallback;
-  } else {
-    favicon.parentElement.innerHTML = iconSvg('globe');
-  }
+      favicon.parentElement.innerHTML = iconSvg('globe');
 }
 
 function getFaviconUrl(url, knownDomain = '') {
@@ -1022,7 +1018,82 @@ function iconSvg(name) {
     more: '<circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle>'
   };
 
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
+  const theme = settings.colorTheme;
+  const shapes = {
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    settings: '<path d="M3 7h18M3 17h18"/><rect x="6" y="4" width="4" height="6" rx="1"/><rect x="14" y="14" width="4" height="6" rx="1"/>',
+    edit: '<path d="m4 16-1 5 5-1L21 7l-4-4Z M14 6l4 4"/>',
+    pin: '<path d="M8 3h8l-1 7 4 4H5l4-4Z M12 14v8"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="1"/><path d="M15 8V3H3v12h5"/>',
+    warning: '<path d="M12 3 2 21h20Z M12 9v5m0 3v1"/>'
+  };
+  let shape = shapes[name] || paths[name] || paths.globe;
+  if (theme === 'classic') {
+    const pixels = {
+      folder: 'M3 5h7v3h11v12H3Z M3 11h18',
+      globe: 'M7 3h10v3h3v12h-3v3H7v-3H4V6h3Z M4 12h16M10 3v18M14 3v18',
+      search: 'M5 3h9v3h3v9h-3v3H5v-3H2V6h3Z M17 17h3v3h3',
+      settings: 'M3 6h18M3 18h18M7 3v6h4V3ZM13 15v6h4v-6Z',
+      'chevron-right': 'M8 4h4v4h4v8h-4v4H8v-4h4V8H8Z',
+      close: 'M4 4h4v4h4v4h4V8h4V4M4 20h4v-4h4v-4M16 16h4v4',
+      more: 'M3 10h4v4H3ZM10 10h4v4h-4ZM17 10h4v4h-4Z',
+      trash: 'M3 6h18M8 6V3h8v3M6 9v12h12V9M10 9v9M14 9v9',
+      edit: 'M3 17h4v4H3ZM7 13h4v4H7ZM11 9h4v4h-4ZM15 5h4v4h-4ZM19 2h3v3h-3Z',
+      pin: 'M6 3h12v4h-3v4h4v4H5v-4h4V7H6ZM12 15v7',
+      copy: 'M8 8h13v13H8ZM3 15V3h12v5',
+      history: 'M3 3v6h6M3 9V6h3V3h12v3h3v12h-3v3H6v-3H3M12 6v6h5',
+      warning: 'M10 3h4v4h3v4h3v4h3v6H1v-6h3v-4h3V7h3ZM12 9v6m0 3v1',
+      'external-link': 'M13 3h8v8M21 3l-9 9M9 5H3v16h16v-6'
+    };
+    shape = `<path d="${pixels[name] || pixels.globe}"/>`;
+  } else if (theme === 'ocean') {
+    const hud = {
+      folder: 'M2 8V3h7l3 4h10v11l-4 4H2V11M5 11h12l3-2M6 18h8',
+      globe: 'M8 2h8l6 6v8l-6 6H8l-6-6V8ZM2 12h20M12 2v20M6 7h12M6 17h12',
+      search: 'M7 2h7l5 5v7l-5 5H7l-5-5V7ZM17 17l5 5M6 10h9M10 6v9',
+      settings: 'M2 6h7m5 0h8M2 18h12m5 0h3M9 3h5v6H9ZM14 15h5v6h-5Z',
+      'chevron-right': 'M6 3l9 9-9 9M15 6l6 6-6 6',
+      more: 'M2 10h4v4H2M10 10h4v4h-4M18 10h4v4h-4',
+      close: 'M3 3l7 7m4 4 7 7M21 3l-7 7m-4 4-7 7',
+      trash: 'M2 6h20M9 6V2h6v4M5 9v9l3 4h8l3-4V9M10 10v7m4-7v7',
+      edit: 'M2 22l2-8L17 1l6 6-13 13ZM14 4l6 6M4 14l6 6',
+      pin: 'M7 2h10l-2 8 6 5H3l6-5ZM12 15v7',
+      copy: 'M8 8h14v10l-4 4H8ZM3 16V2h10l3 3v3',
+      history: 'M2 2v7h7M2 9l5-7h10l5 5v10l-5 5H7l-5-5M12 5v7l5 3',
+      warning: 'M10 2h4l9 18-2 2H3l-2-2ZM12 8v7m0 3v1',
+      'external-link': 'M13 2h9v9M22 2 11 13M8 4H2v14l4 4h14v-8'
+    };
+    shape = `<path d="${hud[name] || hud.globe}"/>`;
+  } else if (theme === 'matcha') {
+    const glyphs = { folder: '[+]', globe: '[@]', search: '[?]', settings: '[=]', edit: '[/]', pin: '[!]', copy: '[#]', warning: '[!]', trash: '[x]', close: '[x]', more: '...', history: '[~]', 'chevron-right': '>_', 'external-link': '[^]' };
+    shape = `<text x="12" y="16" text-anchor="middle" fill="currentColor" stroke="none" font-family="Consolas, monospace" font-size="14" font-weight="700">${glyphs[name] || '[@]'}</text>`;
+  } else if (theme === 'sunset') {
+    const stamps = {
+      folder: '<path d="M3 6h7l2 3h9v11H3ZM3 12h18M6 15h2m2 0h2m2 0h2M6 18h10"/>',
+      globe: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="6"/><path d="M3 12h18M12 3v18M6 6l12 12"/>',
+      search: '<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="4"/><path d="m15 15 6 6m-8-5 6 6"/>'
+    };
+    shape = stamps[name] || `<g transform="translate(3 3) scale(.75)">${shape}</g><path d="M2 6V2h4M18 2h4v4M22 18v4h-4M6 22H2v-4"/>`;
+  } else if (theme === 'candy') {
+    const gummy = {
+      folder: '<path d="M2 8Q2 3 7 3h3q2 0 3 3h4q5 0 5 5v6q0 5-5 5H7q-5 0-5-5Z"/><path d="M7 12h10"/>',
+      globe: '<rect x="2" y="2" width="20" height="20" rx="8"/><ellipse cx="12" cy="12" rx="4" ry="10"/><path d="M2 12h20"/>',
+      search: '<rect x="2" y="2" width="16" height="16" rx="7"/><path d="m17 17 4 4"/>',
+      settings: '<rect x="2" y="3" width="20" height="7" rx="3.5"/><rect x="2" y="14" width="20" height="7" rx="3.5"/><circle cx="8" cy="6.5" r="1"/><circle cx="16" cy="17.5" r="1"/>',
+      more: '<circle cx="4" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="20" cy="12" r="2"/>',
+      trash: '<path d="M4 7h16M9 7V4q3-3 6 0v3M5 7l1 11q0 4 6 4t6-4l1-11M10 11v6m4-6v6"/>',
+      close: '<path d="m7 7 10 10M17 7 7 17"/>',
+      'chevron-right': '<path d="m9 5 5 5q2 2 0 4l-5 5"/>',
+      pin: '<path d="M8 3q4-2 8 0l-1 7q6 4 3 6H6q-3-2 3-6ZM12 16v6"/>',
+      copy: '<rect x="8" y="8" width="14" height="14" rx="5"/><path d="M15 8V6q0-4-4-4H6Q2 2 2 6v5q0 4 4 4h2"/>',
+      edit: '<path d="M4 16 16 4q4-4 6 2 1 2-2 4L8 22H3Z M14 6l5 5"/>',
+      history: '<path d="M3 10q0-8 9-8t9 10-9 10q-6 0-8-5M2 3v7h7M12 7v6l4 2"/>',
+      warning: '<path d="M9 4q3-4 6 0l7 13q2 5-4 5H6q-6 0-4-5ZM12 9v5m0 4v1"/>',
+      'external-link': '<path d="M14 3h7v7M21 3l-9 9M9 5H7q-5 0-5 5v7q0 5 5 5h10q5 0 5-5v-3"/>'
+    };
+    shape = gummy[name] || gummy.globe;
+  }
+  return `<svg viewBox="0 0 24 24" data-icon="${name}" aria-hidden="true">${shape}</svg>`;
 }
 
 // ==================== 键盘导航 ====================
@@ -1566,10 +1637,9 @@ function renderQuickBookmarks(container, bookmarks, className) {
     button.setAttribute('aria-label', `打开${className === 'pinned-bookmark-item' ? '已固定' : '最近使用的'}书签 ${bookmark.title}，${getDisplayUrl(bookmark.url)}`);
     const domain = getFaviconDomain(bookmark.url);
     const faviconUrl = settings.showFavicon ? getFaviconUrl(bookmark.url, domain) : '';
-    const initial = getSiteInitial(bookmark);
     const icon = faviconUrl
-      ? `<img src="${escapeHtml(faviconUrl)}" class="bookmark-favicon" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-favicon-domain="${escapeHtml(domain)}" data-fallback="${escapeHtml(initial)}" alt="">`
-      : escapeHtml(initial);
+      ? `<img src="${escapeHtml(faviconUrl)}" class="bookmark-favicon" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-favicon-domain="${escapeHtml(domain)}" alt="">`
+      : iconSvg('globe');
     button.innerHTML = `<span class="recent-favicon">${icon}</span><span class="recent-copy"><span class="recent-title">${escapeHtml(bookmark.title)}</span><span class="recent-domain">${escapeHtml(getDisplayUrl(bookmark.url))}</span></span>`;
     button.addEventListener('click', () => openBookmark(bookmark.url, bookmark));
     button.addEventListener('contextmenu', event => {
@@ -2275,6 +2345,10 @@ function applyTheme() {
   document.body.classList.toggle('dark-mode', useDarkTheme);
   document.body.dataset.theme = settings.themeMode;
   document.body.dataset.colorTheme = settings.colorTheme;
+  document.querySelectorAll('svg[data-icon]').forEach(svg => {
+    const markup = iconSvg(svg.dataset.icon);
+    svg.innerHTML = markup.slice(markup.indexOf('>') + 1, markup.lastIndexOf('</svg>'));
+  });
   themeModeInputs.forEach(input => {
     input.checked = input.value === settings.themeMode;
   });

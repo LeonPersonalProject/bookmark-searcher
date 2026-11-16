@@ -142,6 +142,34 @@ function installFixture(failures = {}) {
   try {
     await page.goto(pathToFileURL(path.join(project, 'popup.html')).href);
     await page.locator('[data-item-id="bar"]').waitFor();
+    await check('窄初始视口按内容自动定尺寸，六主题均保持 popup 固有宽度', async () => {
+      const sizingPage = await browser.newPage({ viewport: { width: 120, height: 600 }, reducedMotion: 'reduce' });
+      sizingPage.on('pageerror', error => errors.push(error.message));
+      await sizingPage.addInitScript(installFixture);
+      try {
+        await sizingPage.goto(pathToFileURL(path.join(project, 'popup.html')).href);
+        await sizingPage.locator('[data-item-id="bar"]').waitFor();
+        for (const theme of ['classic', 'candy', 'ocean', 'matcha', 'sunset', 'mono']) {
+          for (const dark of [false, true]) {
+            await sizingPage.setViewportSize({ width: 120, height: 600 });
+            await sizingPage.evaluate(({ theme, dark }) => {
+              settings.colorTheme = theme;
+              settings.themeMode = dark ? 'dark' : 'light';
+              applyTheme();
+            }, { theme, dark });
+            // Model the host sizing from content, rather than supplying the expected width.
+            const width = await sizingPage.locator('body').evaluate(element => element.getBoundingClientRect().width);
+            assert.equal(width, 400, `${theme}/${dark}: narrow startup must request 400px`);
+            await sizingPage.setViewportSize({ width, height: 600 });
+            assert.equal(await sizingPage.locator('.container').evaluate(element => element.getBoundingClientRect().width), 400);
+            assert.ok(await sizingPage.locator('[data-item-id="bar"] .item-copy').evaluate(element => element.getBoundingClientRect().width) > 200);
+            assert.equal(await sizingPage.locator('.shortcut-footer').evaluate(element => element.scrollWidth > element.clientWidth), false);
+          }
+        }
+      } finally {
+        await sizingPage.close();
+      }
+    });
     await check('启动、空标题备用名称、最近与固定列表默认收起', async () => {
       assert.equal(await page.locator('#pinnedBookmarks .pinned-bookmark-item').count(), 2);
       assert.equal(await page.locator('#recentBookmarks button').count(), 2);
@@ -385,21 +413,60 @@ function installFixture(failures = {}) {
         searchInput.blur();
         hideSearchHistory();
       });
+      await page.evaluate(() => navigateToFolder('bar', { remember: false }));
+      const settingsSilhouettes = new Set();
       for (const theme of ['classic', 'candy', 'ocean', 'matcha', 'sunset', 'mono']) {
         for (const dark of [false, true]) {
           await page.evaluate(({ theme, dark }) => {
-            document.body.dataset.colorTheme = theme;
-            document.body.classList.toggle('dark-mode', dark);
+            settings.colorTheme = theme;
+            settings.themeMode = dark ? 'dark' : 'light';
+            applyTheme();
           }, { theme, dark });
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          settingsSilhouettes.add(await page.locator('#settingsButton svg').innerHTML());
+          assert.equal(await page.locator('#results svg:not([data-icon])').count(), 0);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > 400), false);
           assert.equal(await page.evaluate(() => document.documentElement.scrollHeight > 600), false);
           if (theme === 'candy') {
             assert.equal(await page.locator('body').evaluate(element => getComputedStyle(element).backgroundImage), 'none');
-            await page.screenshot({ animations: 'disabled', path: path.join(output, `candy-${dark ? 'dark' : 'light'}.png`) });
           }
+          if (theme === 'ocean') {
+            await page.evaluate(() => setSelectedIndex(0));
+            await input.focus();
+            const glow = await page.evaluate(() => {
+              const style = selector => getComputedStyle(document.querySelector(selector));
+              return {
+                title: style('.brand-name').textShadow,
+                search: style('.search-box').boxShadow,
+                clip: style('.search-box').clipPath,
+                icon: style('.search-icon').filter,
+                selected: style('.bookmark-item.selected').boxShadow,
+                text: style('.bookmark-item.selected .bookmark-title').textShadow,
+                favicon: document.querySelector('.bookmark-favicon') ? style('.bookmark-favicon').filter : 'none',
+                brandOverflow: style('.brand-mark').overflow
+              };
+            });
+            assert.notEqual(glow.title, 'none');
+            assert.notEqual(glow.search, 'none');
+            assert.equal(glow.clip, 'none');
+            assert.match(glow.icon, /drop-shadow/);
+            assert.match(glow.selected, /inset/);
+            assert.equal(glow.text, 'none');
+            assert.equal(glow.favicon, 'none');
+            assert.equal(glow.brandOverflow, 'visible');
+            console.log(`Ocean ${dark ? 'dark' : 'light'} computed glow: ${JSON.stringify(glow)}`);
+            await page.evaluate(() => hideSearchHistory());
+            await input.blur();
+          }
+          const names = { classic: '像素街机', ocean: '赛博朋克', matcha: '黑客终端', mono: '瑞士极简', sunset: '复古纸张', candy: '软糖乐园' };
+          await page.screenshot({ animations: 'disabled', path: path.join(output, `${names[theme]}-${dark ? 'dark' : 'light'}.png`) });
         }
       }
+      assert.equal(settingsSilhouettes.size, 6);
+      await page.locator('#settingsButton').click();
+      assert.equal(await page.locator('.palette-preview').count(), 6);
+      await page.screenshot({ path: path.join(output, '六风格选择器.png') });
+      await page.keyboard.press('Escape');
       await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
       assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches), true);
       await page.screenshot({ path: path.join(output, 'forced-colors.png') });

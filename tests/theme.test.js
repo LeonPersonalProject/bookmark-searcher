@@ -7,6 +7,25 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'popup.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 const palettes = ['classic', 'candy', 'ocean', 'matcha', 'sunset', 'mono'];
 const modes = ['light', 'dark'];
+const { createPopup } = require('./helpers/popup');
+
+test('六种风格为全部语义图标生成不同轮廓', () => {
+  const popup = createPopup();
+  for (const name of ['folder', 'globe', 'search', 'settings', 'edit', 'pin', 'copy', 'warning', 'trash', 'close', 'more', 'history', 'chevron-right', 'external-link']) {
+    const silhouettes = palettes.map(theme => popup.run(`settings.colorTheme = '${theme}'; iconSvg('${name}');`));
+    assert.equal(new Set(silhouettes).size, 6, `${name} 必须有六种独立轮廓`);
+    silhouettes.forEach(svg => assert.match(svg, /data-icon=/));
+  }
+});
+
+test('主题切换后的动态文件夹与离线书签使用当前风格', () => {
+  const popup = createPopup([{ id: 'folder', type: 'folder', title: '资料', childCount: 1 }, { id: 'site', title: '网页', url: 'https://example.com/' }]);
+  for (const theme of palettes) {
+    popup.run(`settings.colorTheme = '${theme}'; settings.showFavicon = false; updateView();`);
+    assert.match(popup.rows()[0].innerHTML, /data-icon="folder"/);
+    assert.match(popup.rows()[1].innerHTML, /data-icon="globe"/);
+  }
+});
 const textBackgrounds = [
   'page-background',
   'surface',
