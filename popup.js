@@ -1027,6 +1027,17 @@ function iconSvg(name) {
     copy: '<rect x="8" y="8" width="13" height="13" rx="1"/><path d="M15 8V3H3v12h5"/>',
     warning: '<path d="M12 3 2 21h20Z M12 9v5m0 3v1"/>'
   };
+  if (name === 'brand') {
+    const brands = {
+      classic: '<path fill="currentColor" stroke="none" d="M6 3h3v3h6V3h3v3h3v12h-3v3h-3v-3H9v3H6v-3H3V6h3Zm0 6v3h3V9Zm9 0v3h3V9Z"/>',
+      ocean: '<path d="M5 2h11l4 4v16l-8-5-8 5V3M8 5v10M16 6h5M2 8h3"/>',
+      matcha: '<path d="M3 4h18v16H3ZM7 8l4 4-4 4M13 16h5"/>',
+      mono: '<path fill="currentColor" stroke="none" d="M4 3h7c7 0 10 4 10 9s-3 9-10 9H4Zm5 4v10h2c4 0 5-2 5-5s-1-5-5-5Z"/>',
+      sunset: '<path d="m12 2 3 3 4 1 1 4 2 2-2 3-1 4-4 1-3 2-3-2-4-1-1-4-2-3 2-2 1-4 4-1Z"/><circle cx="12" cy="12" r="6"/><path d="M9 8h6v9l-3-2-3 2Z"/>',
+      candy: '<circle class="icon-soft-fill" cx="6" cy="6" r="4"/><circle class="icon-soft-fill" cx="18" cy="6" r="4"/><rect class="icon-soft-fill" x="3" y="5" width="18" height="17" rx="8"/><path d="M8 11v1m8-1v1M10 16q2 2 4 0"/><ellipse cx="12" cy="15" rx="2" ry="1.5"/>'
+    };
+    return `<svg viewBox="0 0 24 24" data-icon="brand" aria-hidden="true">${brands[theme] || brands.classic}</svg>`;
+  }
   let shape = shapes[name] || paths[name] || paths.globe;
   if (theme === 'classic') {
     const pixels = {
@@ -1043,7 +1054,7 @@ function iconSvg(name) {
       copy: 'M8 8h13v13H8ZM3 15V3h12v5',
       history: 'M3 3v6h6M3 9V6h3V3h12v3h3v12h-3v3H6v-3H3M12 6v6h5',
       warning: 'M10 3h4v4h3v4h3v4h3v6H1v-6h3v-4h3V7h3ZM12 9v6m0 3v1',
-      'external-link': 'M13 3h8v8M21 3l-9 9M9 5H3v16h16v-6'
+      'external-link': 'M13 3h8v8M18 6h-3v3h-3v3H9v3M9 5H3v16h16v-6'
     };
     shape = `<path d="${pixels[name] || pixels.globe}"/>`;
   } else if (theme === 'ocean') {
@@ -1065,8 +1076,23 @@ function iconSvg(name) {
     };
     shape = `<path d="${hud[name] || hud.globe}"/>`;
   } else if (theme === 'matcha') {
-    const glyphs = { folder: '[+]', globe: '[@]', search: '[?]', settings: '[=]', edit: '[/]', pin: '[!]', copy: '[#]', warning: '[!]', trash: '[x]', close: '[x]', more: '...', history: '[~]', 'chevron-right': '>_', 'external-link': '[^]' };
-    shape = `<text x="12" y="16" text-anchor="middle" fill="currentColor" stroke="none" font-family="Consolas, monospace" font-size="14" font-weight="700">${glyphs[name] || '[@]'}</text>`;
+    const terminal = {
+      folder: 'M8 9h3v3h5v5H8Z',
+      globe: 'M9 9h6v6H9ZM15 9v8h-5v-2',
+      search: 'M9 8h6v4h-3v2M12 17v1',
+      settings: 'M8 10h8M8 14h8',
+      edit: 'M9 17l6-10',
+      pin: 'M9 8h6l-1 4 2 2H8l2-2ZM12 14v4',
+      copy: 'M10 10h6v7h-6ZM8 14V7h6v3',
+      warning: 'M12 7v7M12 17v1',
+      trash: 'M9 9l6 7M15 9l-6 7M8 7h8',
+      close: 'M9 9l6 6M15 9l-6 6',
+      more: 'M8 15h1M12 15h1M16 15h1',
+      history: 'M8 12v-4h8v8h-5M12 9v3h3',
+      'chevron-right': 'M8 8l5 4-5 4M14 17h4',
+      'external-link': 'M8 16l8-8M11 8h5v5'
+    };
+    shape = `<path d="M6 4H3v16h3M18 4h3v16h-3"/><path d="${terminal[name] || terminal.globe}"/>`;
   } else if (theme === 'sunset') {
     const stamps = {
       folder: '<path d="M3 6h7l2 3h9v11H3ZM3 12h18M6 15h2m2 0h2m2 0h2M6 18h10"/>',
@@ -1092,6 +1118,13 @@ function iconSvg(name) {
       'external-link': '<path d="M14 3h7v7M21 3l-9 9M9 5H7q-5 0-5 5v7q0 5 5 5h10q5 0 5-5v-3"/>'
     };
     shape = gummy[name] || gummy.globe;
+    if (['folder', 'search', 'copy', 'pin'].includes(name)) {
+      shape = shape.replace('<path ', '<path class="icon-soft-fill" ').replace('<rect ', '<rect class="icon-soft-fill" ');
+    }
+  } else if (theme === 'mono') {
+    shape = `<g transform="translate(2 2) scale(.833333)">${shape}</g>`;
+    if (name === 'more') shape = '<path fill="currentColor" stroke="none" d="M4 11h2v2H4ZM11 11h2v2h-2ZM18 11h2v2h-2Z"/>';
+    if (name === 'pin') shape = '<path fill="currentColor" stroke="none" d="M8 4h8l-1 6 3 4H6l3-4Z"/><path d="M12 14v7"/>';
   }
   return `<svg viewBox="0 0 24 24" data-icon="${name}" aria-hidden="true">${shape}</svg>`;
 }
@@ -2345,9 +2378,25 @@ function applyTheme() {
   document.body.classList.toggle('dark-mode', useDarkTheme);
   document.body.dataset.theme = settings.themeMode;
   document.body.dataset.colorTheme = settings.colorTheme;
+  const brandNames = { classic: 'A 像素街机', ocean: 'B 赛博朋克', matcha: 'C 黑客终端', mono: 'D 瑞士极简', sunset: '书签 · 藏书票', candy: 'F 软糖乐园' };
+  document.querySelector('.brand-name').textContent = brandNames[settings.colorTheme] || '书签';
   document.querySelectorAll('svg[data-icon]').forEach(svg => {
     const markup = iconSvg(svg.dataset.icon);
     svg.innerHTML = markup.slice(markup.indexOf('>') + 1, markup.lastIndexOf('</svg>'));
+  });
+  // Decorative previews are self-contained and never fetch external assets.
+  document.querySelectorAll('.palette-preview').forEach(preview => {
+    if (preview.querySelector('svg')) return;
+    const palette = preview.closest('[data-palette]').dataset.palette;
+    const scenes = {
+      classic: '<rect width="160" height="80" fill="#191b31"/><path fill="#33365e" d="M0 60h160v20H0zM110 10h30v50h-30z"/><path fill="#c78039" d="M12 23h6v-6h12v6h6v18h-6v6H18v-6h-6zM142 9h4v4h4v4h-4v4h-4v-4h-4v-4h4z"/><path fill="#5354c8" d="M44 16h58v8H44zM44 29h48v6H44zM12 56h82v4H12z"/><path fill="#f5f7ff" d="M18 26h4v5h-4zM26 26h4v5h-4zM44 40h40v4H44zM12 66h111v3H12z"/><path fill="#ff8278" d="M117 19h16v7h-16zM117 32h10v7h-10z"/>',
+      ocean: '<rect width="160" height="80" fill="#101b2b"/><path fill="#19253e" d="M0 8h20v62H0zM25 23h19v47H25zM50 4h25v66H50zM81 20h25v50H81zM115 8h25v62h-25zM145 28h15v42h-15z"/><path stroke="#62e7f5" stroke-width="1" fill="none" d="M0 65h160M20 8v57M50 4v61M81 20v45M115 8v57M5 23h10m-10 8h10m15 2h9m-9 10h9M55 15h15m-15 8h15m16 10h15m-15 9h15M120 18h15m-15 8h15M66 80l14-15 16 15"/><path stroke="#bc8cff" fill="none" d="M25 23h19M106 20v45M140 8v57M0 72h160M34 80l46-15 49 15"/><path fill="#bc8cff" d="M58 33h10v17H58z"/>',
+      matcha: '<rect width="160" height="80" fill="#131d18"/><g fill="#86d5a5" font-family="Consolas,monospace" font-size="6"><text x="8" y="12">$ bookmark --search</text><text x="8" y="22">&gt; indexing / bookmarks</text><text x="8" y="32">[OK] 1248 entries loaded</text><text x="8" y="42">0101 1100 1010 0011</text><text x="8" y="52">&gt; find github --all</text><text x="8" y="62">[2] results / ready</text><text x="8" y="72">&gt; _</text></g><path stroke="#23734d" stroke-width=".5" d="M115 7v65m8-65v50m8-40v55m8-65v55m8-30v40"/>',
+      mono: '<rect width="160" height="80" fill="#fafbfc"/><path fill="#202327" d="M12 10h51v8H12zM12 27h136v1H12zM12 39h14v12H12zM34 40h52v3H34zM34 47h80v2H34zM12 60h14v12H12zM34 61h65v3H34zM34 68h80v2H34z"/><path fill="#e34d43" d="M133 10h15v8h-15zM6 37h2v17H6z"/>',
+      sunset: '<rect width="160" height="80" fill="#faf6ee"/><path stroke="#9b753e" fill="none" stroke-width=".8" d="M4 4h152v72H4zM7 7h146v66H7zM58 23h82m-82 8h70m-70 8h80M18 59h124m-124 6h95"/><circle cx="28" cy="30" r="15" fill="none" stroke="#87364d"/><circle cx="28" cy="30" r="11" fill="none" stroke="#87364d" stroke-dasharray="1 2"/><path stroke="#87364d" fill="none" d="M23 23h10v17l-5-3-5 3z"/><text x="58" y="17" font-family="Georgia,serif" font-size="7" fill="#87364d">EX LIBRIS</text><path stroke="#9b753e" opacity=".2" d="M1 14h158M1 44h158M1 69h158"/>',
+      candy: '<defs><linearGradient id="candy-sky" x2="0" y2="1"><stop stop-color="#eee0fa"/><stop offset="1" stop-color="#fbe6ef"/></linearGradient><linearGradient id="candy-bear" x2="0" y2="1"><stop stop-color="#f5ccdf"/><stop offset="1" stop-color="#dba5cc"/></linearGradient></defs><rect width="160" height="80" fill="url(#candy-sky)"/><path d="M15 62a62 62 0 0 1 124 0" stroke="#c6a3e8" stroke-width="5" fill="none" opacity=".5"/><path d="M20 62a57 57 0 0 1 114 0" stroke="#edb6a5" stroke-width="5" fill="none" opacity=".5"/><g fill="#fbf8fd"><ellipse cx="27" cy="26" rx="20" ry="6"/><circle cx="23" cy="22" r="7"/><ellipse cx="132" cy="19" rx="19" ry="6"/><circle cx="128" cy="14" r="8"/></g><g fill="#edb6a5"><ellipse cx="36" cy="71" rx="29" ry="9"/><ellipse cx="119" cy="73" rx="30" ry="10"/></g><ellipse cx="80" cy="72" rx="34" ry="9" fill="#c6a3e8"/><g fill="url(#candy-bear)" stroke="#c994be" stroke-width=".8"><ellipse cx="80" cy="59" rx="18" ry="19"/><circle cx="64" cy="30" r="9"/><circle cx="96" cy="30" r="9"/><rect x="59" y="29" width="42" height="32" rx="15"/><ellipse cx="60" cy="65" rx="9" ry="6"/><ellipse cx="100" cy="65" rx="9" ry="6"/></g><ellipse cx="80" cy="48" rx="9" ry="7" fill="#f9e5ef"/><g fill="#8055a4"><circle cx="70" cy="41" r="1.7"/><circle cx="90" cy="41" r="1.7"/><ellipse cx="80" cy="46" rx="2.3" ry="1.5"/></g><path d="M77 51q3 3 6 0" stroke="#8055a4" fill="none"/><path d="m143 35 2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#fbf8fd"/>'
+    };
+    preview.innerHTML = `<svg class="theme-scene" viewBox="0 0 160 80" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${scenes[palette]}</svg>`;
   });
   themeModeInputs.forEach(input => {
     input.checked = input.value === settings.themeMode;

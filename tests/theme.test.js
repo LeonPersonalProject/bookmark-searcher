@@ -26,6 +26,25 @@ test('主题切换后的动态文件夹与离线书签使用当前风格', () =>
     assert.match(popup.rows()[1].innerHTML, /data-icon="globe"/);
   }
 });
+test('像素、终端、软糖与极简图标保留各自形态', () => {
+  const popup = createPopup();
+  const icon = (theme, name) => popup.run(`settings.colorTheme = '${theme}'; iconSvg('${name}');`);
+  for (const name of ['search', 'edit', 'external-link']) {
+    assert.doesNotMatch(icon('classic', name), /d="[^"]*[lLqQcCaA]/);
+  }
+  assert.doesNotMatch(icon('matcha', 'settings'), /<text/);
+  assert.match(icon('matcha', 'settings'), /M6 4H3v16h3/);
+  assert.match(icon('candy', 'folder'), /icon-soft-fill/);
+  assert.match(icon('mono', 'pin'), /fill="currentColor"/);
+});
+
+test('正文容器继承主题变量，不重新锁定浅色配色', () => {
+  for (const selector of ['settings-body', 'shortcut-help-body']) {
+    const block = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))[1];
+    assert.doesNotMatch(block, /--(?:text-|surface|accent|danger|folder|success|page-background)/);
+  }
+});
+
 const textBackgrounds = [
   'page-background',
   'surface',

@@ -62,6 +62,9 @@ test('设置命令复用持久化，导航和帮助复用既有入口', async ()
     { id: 'child', title: 'Child', url: 'https://child.example/', parentId: 'folder' }
   ]);
   popup.document.body = popup.document;
+  const querySelector = popup.document.querySelector.bind(popup.document);
+  const brand = { textContent: '' };
+  popup.document.querySelector = selector => selector === '.brand-name' ? brand : querySelector(selector);
   popup.run(`
     let savedSettings = [];
     chrome.runtime = {};

@@ -422,7 +422,7 @@ function installFixture(failures = {}) {
             settings.themeMode = dark ? 'dark' : 'light';
             applyTheme();
           }, { theme, dark });
-          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          await page.waitForTimeout(250);
           settingsSilhouettes.add(await page.locator('#settingsButton svg').innerHTML());
           assert.equal(await page.locator('#results svg:not([data-icon])').count(), 0);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > 400), false);
@@ -433,6 +433,7 @@ function installFixture(failures = {}) {
           if (theme === 'ocean') {
             await page.evaluate(() => setSelectedIndex(0));
             await input.focus();
+            await page.waitForTimeout(250);
             const glow = await page.evaluate(() => {
               const style = selector => getComputedStyle(document.querySelector(selector));
               return {
@@ -446,20 +447,25 @@ function installFixture(failures = {}) {
                 brandOverflow: style('.brand-mark').overflow
               };
             });
-            assert.notEqual(glow.title, 'none');
+            assert.equal(glow.title, 'none');
             assert.notEqual(glow.search, 'none');
+            assert.doesNotMatch(glow.search, /rgba\(0, 0, 0, 0\)/);
             assert.equal(glow.clip, 'none');
             assert.match(glow.icon, /drop-shadow/);
             assert.match(glow.selected, /inset/);
             assert.equal(glow.text, 'none');
             assert.equal(glow.favicon, 'none');
-            assert.equal(glow.brandOverflow, 'visible');
+            assert.equal(glow.brandOverflow, 'hidden');
             console.log(`Ocean ${dark ? 'dark' : 'light'} computed glow: ${JSON.stringify(glow)}`);
             await page.evaluate(() => hideSearchHistory());
             await input.blur();
           }
           const names = { classic: '像素街机', ocean: '赛博朋克', matcha: '黑客终端', mono: '瑞士极简', sunset: '复古纸张', candy: '软糖乐园' };
           await page.screenshot({ animations: 'disabled', path: path.join(output, `${names[theme]}-${dark ? 'dark' : 'light'}.png`) });
+          await page.locator('#settingsButton').click();
+          await page.screenshot({ animations: 'disabled', path: path.join(output, `${names[theme]}-${dark ? 'dark' : 'light'}-settings.png`) });
+          await page.keyboard.press('Escape');
+          await page.locator('#settingsPanel').waitFor({ state: 'hidden' });
         }
       }
       assert.equal(settingsSilhouettes.size, 6);
@@ -472,6 +478,131 @@ function installFixture(failures = {}) {
       await page.screenshot({ path: path.join(output, 'forced-colors.png') });
     });
 
+    await check('真实计算样式：六主题明暗文字、占位符与交叉状态对比度', async () => {
+      await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'reduce' });
+      const failures = [];
+      let samples = 0;
+      let minimum = 21;
+      let minimumText = 21;
+      const audit = async (theme, state, root) => {
+        await page.waitForTimeout(250);
+        const readings = await page.evaluate(root => {
+          const canvas = document.createElement('canvas').getContext('2d');
+          const rgba = value => {
+            canvas.clearRect(0, 0, 1, 1);
+            canvas.fillStyle = value;
+            canvas.fillRect(0, 0, 1, 1);
+            return [...canvas.getImageData(0, 0, 1, 1).data].map((v, i) => i === 3 ? v / 255 : v);
+          };
+          const over = (fg, bg) => fg.slice(0, 3).map((v, i) => v * fg[3] + bg[i] * (1 - fg[3])).concat(1);
+          const luminance = color => color.slice(0, 3).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+          const background = element => {
+            const chain = [];
+            for (let node = element; node; node = node.parentElement) chain.unshift(node);
+            return chain.reduce((bg, node) => over(rgba(getComputedStyle(node).backgroundColor), bg), [255, 255, 255, 1]);
+          };
+          const readings = [];
+          const inspect = (element, pseudo = null, threshold = 4.5) => {
+            if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || element.closest('[hidden], .visually-hidden, .palette-preview')) return;
+            const style = getComputedStyle(element, pseudo);
+            const bg = background(element);
+            let fg = rgba(style.color);
+            fg[3] *= Number(style.opacity);
+            fg = over(fg, bg);
+            const a = luminance(fg), b = luminance(bg);
+            readings.push({ selector: element.id || element.className.baseVal || element.className || element.tagName, pseudo, foreground: style.color, background: bg, ratio: (Math.max(a, b) + .05) / (Math.min(a, b) + .05), threshold });
+          };
+          for (const element of document.querySelector(root).querySelectorAll('*')) {
+            if ([...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())) inspect(element);
+            if (element.matches('input:not([type=radio]):not([type=checkbox])')) {
+              inspect(element);
+              if (element.placeholder) inspect(element, '::placeholder');
+            }
+            if (element.matches('svg[data-icon]')) inspect(element, null, 3);
+          }
+          return readings;
+        }, root);
+        samples += readings.length;
+        for (const reading of readings) {
+          minimum = Math.min(minimum, reading.ratio);
+          if (reading.threshold === 4.5) minimumText = Math.min(minimumText, reading.ratio);
+          if (reading.ratio < reading.threshold) failures.push({ theme, state, ...reading });
+        }
+      };
+      for (const theme of ['classic', 'candy', 'ocean', 'matcha', 'sunset', 'mono']) {
+        for (const mode of ['dark', 'light']) {
+          const name = `${theme}/${mode}`;
+          await page.evaluate(({ theme, mode }) => {
+            settings.colorTheme = theme; settings.themeMode = mode; applyTheme();
+            searchHistory = ['开发', '设计'];
+            closeSettingsPanel(); closeShortcutHelpDialog(); closeBookmarkEditorDialog(); closeConfirmation(false);
+            navigateToFolder(null, { remember: false });
+          }, { theme, mode });
+          await page.mouse.move(0, 0);
+          await audit(name, 'home', '.container');
+          await input.focus();
+          await page.evaluate(() => showSearchHistory());
+          await audit(name, 'history', '#searchHistory');
+          await page.evaluate(() => setHistorySelectedIndex(0));
+          await page.locator('.history-item').first().hover({ force: true });
+          await audit(name, 'history selected+hover', '#searchHistory');
+          await search('开发');
+          for (const state of ['normal', 'hover', 'selected+hover+focus']) {
+            await page.evaluate(state => setSelectedIndex(state === 'selected+hover+focus' ? 0 : -1), state);
+            if (state !== 'normal') await rows.first().hover();
+            if (state.includes('focus')) await rows.first().focus();
+            await audit(name, `result ${state}`, '.container');
+          }
+          await search('example');
+          await audit(name, 'domain highlight', '#results');
+          await search('参考');
+          await audit(name, 'path highlight', '#results');
+          await search('/');
+          await audit(name, 'commands', '.container');
+          await search('域名');
+          await menu('domain');
+          await audit(name, 'menu', '#bookmarkActions');
+          for (const button of await page.locator('#bookmarkActions button').all()) {
+            await button.hover(); await button.focus();
+            await audit(name, 'menu hover+focus', '#bookmarkActions');
+          }
+          await page.keyboard.press('Escape');
+          await page.evaluate(() => openBookmarkEditor(itemsById.get('domain')));
+          await audit(name, 'editor', '#bookmarkEditor');
+          await page.locator('#saveBookmarkEditor').hover();
+          await audit(name, 'editor save hover', '#bookmarkEditor');
+          await page.evaluate(() => closeBookmarkEditorDialog());
+          await page.locator('#settingsButton').click();
+          await audit(name, 'settings', '#settingsPanel');
+          for (const item of await page.locator('.setting-item, .palette-option, .theme-option, #clearHistoryButton').all()) {
+            await item.hover();
+            const control = item.locator('input');
+            if (await control.count()) await control.focus(); else await item.focus();
+            await audit(name, 'settings hover+focus', '#settingsPanel');
+          }
+          await page.locator('#clearHistoryButton').click();
+          await audit(name, 'confirmation', '#confirmDialog');
+          await page.locator('#confirmActionButton').hover();
+          await audit(name, 'confirmation hover', '#confirmDialog');
+          await page.keyboard.press('Escape');
+          await page.keyboard.press('Escape');
+          await page.locator('#shortcutHelpButton').click();
+          await audit(name, 'help', '#shortcutHelp');
+          await page.keyboard.press('Escape');
+          await search('no-such-bookmark');
+          await audit(name, 'empty', '.container');
+          await page.evaluate(() => { showError('Contrast error'); });
+          await audit(name, 'error toast', '.container');
+          await page.evaluate(() => { showError('Contrast success', 'success'); });
+          await audit(name, 'success toast', '.container');
+        }
+      }
+      console.log(`Computed contrast: ${samples} samples; minimum ${minimum.toFixed(3)}:1; text minimum ${minimumText.toFixed(3)}:1; failures ${failures.length}`);
+      console.log(JSON.stringify(failures, null, 2));
+      assert.deepEqual(failures, [], 'Actual rendered text must reach 4.5:1 and icons 3:1');
+      await home();
+    });
+
     await check('首次书签读取失败可重试，偏好读取失败不阻断启动', async () => {
       const failedPage = await browser.newPage({ viewport: { width: 400, height: 600 } });
       failedPage.on('pageerror', error => errors.push(error.message));
@@ -482,6 +613,40 @@ function installFixture(failures = {}) {
       await failedPage.locator('#retryLoadButton').click();
       await failedPage.locator('[data-item-id="bar"]').waitFor();
       await failedPage.close();
+    });
+    await check('参考内容夹具：六主题明暗弹窗及设置实际截图', async () => {
+      const visualPage = await browser.newPage({ viewport: { width: 400, height: 600 }, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+      await visualPage.addInitScript(installFixture);
+      await visualPage.goto(pathToFileURL(path.join(project, 'popup.html')).href);
+      await visualPage.locator('[data-item-id="bar"]').waitFor();
+      await visualPage.evaluate(async () => {
+        const nodes = [
+          { id: 'tools', title: '开发工具', children: [{ id: 'mdn', title: 'MDN Web Docs', url: 'https://developer.mozilla.org/' }] },
+          { id: 'resources', title: '设计资源', children: [{ id: 'figma', title: 'Figma', url: 'https://figma.com/' }] },
+          { id: 'github', title: 'GitHub', url: 'https://github.com/' },
+          { id: 'notion', title: 'Notion', url: 'https://notion.so/' },
+          { id: 'dribbble', title: 'Dribbble', url: 'https://dribbble.com/' }
+        ];
+        __fixture.tree.splice(0, __fixture.tree.length, { id: '0', title: '', children: nodes });
+        pinnedBookmarkIds = ['github', 'figma'];
+        recentBookmarks = [{ id: 'mdn', title: 'MDN Web Docs', url: 'https://developer.mozilla.org/', parentId: 'tools', path: '开发工具' }];
+        settings.showFavicon = false;
+        await refreshBookmarks();
+        displayPinnedBookmarks(); displayRecentBookmarks();
+        navigateToFolder(null, { remember: false });
+        clearTimeout(toastTimeout); errorToast.hidden = true; searchInput.blur(); hideSearchHistory();
+      });
+      for (const theme of ['classic', 'ocean', 'matcha', 'mono', 'sunset', 'candy']) {
+        for (const mode of ['light', 'dark']) {
+          await visualPage.evaluate(({ theme, mode }) => { settings.colorTheme = theme; settings.themeMode = mode; applyTheme(); }, { theme, mode });
+          await visualPage.screenshot({ animations: 'disabled', path: path.join(output, `reference-${theme}-${mode}-popup.png`) });
+          await visualPage.locator('#settingsButton').click();
+          await visualPage.screenshot({ animations: 'disabled', path: path.join(output, `reference-${theme}-${mode}-settings.png`) });
+          await visualPage.keyboard.press('Escape');
+          await visualPage.locator('#settingsPanel').waitFor({ state: 'hidden' });
+        }
+      }
+      await visualPage.close();
     });
     assert.deepEqual(errors, [], '浏览器不应出现未捕获的运行时错误');
     console.log(`浏览器检查全部通过。截图：${output}`);
